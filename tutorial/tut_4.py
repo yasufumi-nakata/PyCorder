@@ -149,7 +149,7 @@ class _OnlineCfgPane(Qt.QFrame, frmTUT4Online.Ui_frmTUT4Online):
     '''
     def __init__(self, module, *args):
         # initialize designer generated user interface
-        apply(Qt.QFrame.__init__, (self,) + args)
+        Qt.QFrame.__init__(self, *args)
         self.setupUi(self)
         
         self.module = module

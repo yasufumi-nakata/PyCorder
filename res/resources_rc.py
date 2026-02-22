@@ -7,7 +7,10 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore
+try:
+    from PyQt4 import QtCore
+except ImportError:
+    from PySide6 import QtCore
 
 qt_resource_data = "\
 \x00\x00\x10\x2a\
@@ -3680,10 +3683,36 @@ qt_resource_struct = "\
 \x00\x00\x00\x66\x00\x00\x00\x00\x00\x01\x00\x00\x88\xae\
 "
 
+_registered = False
+
+
+def _resource_blobs():
+    if isinstance(qt_resource_struct, str):
+        s = qt_resource_struct.encode('latin1')
+    else:
+        s = qt_resource_struct
+    if isinstance(qt_resource_name, str):
+        n = qt_resource_name.encode('latin1')
+    else:
+        n = qt_resource_name
+    if isinstance(qt_resource_data, str):
+        d = qt_resource_data.encode('latin1')
+    else:
+        d = qt_resource_data
+    return s, n, d
+
+
 def qInitResources():
-    QtCore.qRegisterResourceData(0x01, qt_resource_struct, qt_resource_name, qt_resource_data)
+    global _registered
+    if _registered:
+        return
+    QtCore.qRegisterResourceData(0x01, *_resource_blobs())
+    _registered = True
+
 
 def qCleanupResources():
-    QtCore.qUnregisterResourceData(0x01, qt_resource_struct, qt_resource_name, qt_resource_data)
-
-qInitResources()
+    global _registered
+    if not _registered:
+        return
+    QtCore.qUnregisterResourceData(0x01, *_resource_blobs())
+    _registered = False

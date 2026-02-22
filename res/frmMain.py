@@ -13,9 +13,7 @@ class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(862, 604)
-        icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icons/PyCorder.ico"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        MainWindow.setWindowIcon(icon)
+        MainWindow.setWindowIcon(QtGui.QIcon(":/icons/PyCorder.ico"))
         self.centralwidget = QtGui.QWidget(MainWindow)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(0)
@@ -56,9 +54,7 @@ class Ui_MainWindow(object):
         self.verticalLayout_OnlinePane.setObjectName("verticalLayout_OnlinePane")
         self.pushButtonConfiguration = QtGui.QPushButton(self.scrollAreaWidgetContents)
         self.pushButtonConfiguration.setStyleSheet("text-align: left; padding-left: 10px; padding-top: 5px; padding-bottom: 5px")
-        icon1 = QtGui.QIcon()
-        icon1.addPixmap(QtGui.QPixmap(":/icons/process.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.pushButtonConfiguration.setIcon(icon1)
+        self.pushButtonConfiguration.setIcon(QtGui.QIcon(":/icons/process.png"))
         self.pushButtonConfiguration.setIconSize(QtCore.QSize(32, 32))
         self.pushButtonConfiguration.setObjectName("pushButtonConfiguration")
         self.verticalLayout_OnlinePane.addWidget(self.pushButtonConfiguration)
@@ -110,4 +106,7 @@ class Ui_MainWindow(object):
         self.actionSave_Configuration.setText(QtGui.QApplication.translate("MainWindow", "Save Configuration ...", None, QtGui.QApplication.UnicodeUTF8))
         self.actionDefault_Configuration.setText(QtGui.QApplication.translate("MainWindow", "Reset Configuration", None, QtGui.QApplication.UnicodeUTF8))
 
-import resources_rc
+try:
+    import resources_rc
+except ImportError:
+    from res import resources_rc

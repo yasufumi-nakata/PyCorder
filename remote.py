@@ -37,7 +37,17 @@ from select import *
 import threading
 import time
 import sys
-import Queue
+try:
+    import Queue as queue
+except ImportError:
+    import queue
+try:
+    unicode
+except NameError:
+    def unicode(obj, enc='utf-8'):
+        if isinstance(obj, bytes):
+            return obj.decode(enc)
+        return str(obj)
 
 from modbase import ModuleEvent
 from modbase import EventType
@@ -190,7 +200,7 @@ class RemoteClientConnection(Qt.QObject):
         self.ParentServer = parent_server
         self.sock = clientsock
         self.addr = addr
-        self.transmit_queue = Queue.Queue(20)
+        self.transmit_queue = queue.Queue(20)
         # start receive thread
         self.connected = True
         self.clientthread = threading.Thread(target=self._receive_thread)
@@ -262,9 +272,9 @@ class RemoteClientConnection(Qt.QObject):
                             if len(wr) > 0:
                                 sent = self.sock.send(data[totalsent:])
                                 if sent == 0:
-                                    raise RuntimeError, "socket connection broken"
+                                    raise RuntimeError("socket connection broken")
                                 totalsent = totalsent + sent
-                    except Queue.Empty:
+                    except queue.Empty:
                         time.sleep(0.002)        # suspend thread (default = 2ms)
                             
             except Exception as e:

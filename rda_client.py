@@ -38,6 +38,10 @@ from select import *
 from struct import *
 from binascii import *
 from ctypes import *
+try:
+    import Queue as queue
+except ImportError:
+    import queue
 
 from res import frmRdaClientOnline
 
@@ -645,7 +649,7 @@ class _OnlineCfgPane(Qt.QFrame, frmRdaClientOnline.Ui_frmRdaClientOnline):
     ''' RDA client online configuration pane
     '''
     def __init__(self, amp, *args):
-        apply(Qt.QFrame.__init__, (self,) + args)
+        Qt.QFrame.__init__(self, *args)
         self.setupUi(self)
         self.amp = amp
        

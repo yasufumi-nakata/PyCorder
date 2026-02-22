@@ -53,7 +53,24 @@ B{Dependencies:}
 @author: Norbert Hauser
 @version: 1.0
 '''
-from PyQt4.Qt import QString
+import sys
+
+try:
+    from PyQt4.Qt import QString
+except (ImportError, ModuleNotFoundError) as exc:
+    if __name__ == "__main__":
+        from headless import run as run_headless
+        run_headless(str(exc))
+        sys.exit(0)
+    else:
+        raise
+
+try:
+    unicode
+except NameError:
+    unicode = str
+
+from PyQt4 import QtCore
 
 __version__ = "1.0.9"
 '''Application Version'''
@@ -83,10 +100,29 @@ ShowBatteryReminder = True
 ForceBatteryLogging = True
 
 
-import sys
 import collections
 import re
 from optparse import OptionParser
+
+
+def create_option_parser():
+		"""Create and return the shared CLI option parser."""
+		parser = OptionParser()
+		parser.add_option("-m", "--modules", dest="ModuleFile",
+											help="Instantiate modules from separate module definition file MODULEFILE. "
+													 "InstantiateModules() from this file will be called." )
+		parser.add_option("-c", "--configfile", dest="ConfigurationFile",
+											help="Load CONFIGURATIONFILE instead of last configuration.")
+		parser.add_option("-r", "--runas", dest="RunAs", default="",
+											help="Specify the module configuration that should be used.")
+		parser.add_option("-o", "--options", dest="Options", default="",
+											help="General options: R - start the remote server")
+		parser.add_option("--smoketest", action="store_true", dest="SmokeTest", default=False,
+											help="Run a headless startup smoke test and quit automatically.")
+		parser.add_option("--smoketest-ms", type="int", dest="SmokeTestMs", default=1500,
+											help="Milliseconds to keep the Qt event loop running in --smoketest mode.")
+		return parser
+
 
 '''
 ------------------------------------------------------------
@@ -97,13 +133,22 @@ import loadlibs
 
 # check library import
 if len(loadlibs.import_log) > 0:
-		print "PyCorder: The following libraries are missing or have the wrong version\r\n\r\n"
-		print loadlibs.import_log
-		if "missing" in loadlibs.import_log:
-				raw_input("Press RETURN to close the application ..." )
-				sys.exit(1)
+		try:
+				print("PyCorder: The following libraries are missing or have the wrong version\r\n\r\n")
+				print(loadlibs.import_log)
+		except Exception:
+				pass
+		# 非対話モード: 続行する（必要に応じて上位で終了）
+
+if not loadlibs.has_all_dependencies():
+		missing = ', '.join(sorted(loadlibs.missing_dependencies)) if hasattr(loadlibs, 'missing_dependencies') else 'unknown'
+		if __name__ == "__main__":
+				from headless import run as run_headless
+				reason = "Missing required dependencies: %s" % (missing,)
+				run_headless(reason)
+				sys.exit(0)
 		else:
-				raw_input("Press RETURN to continue ..." )
+				raise RuntimeError("Missing required dependencies: %s" % (missing,))
 
 
 
@@ -201,7 +246,10 @@ class MainWindow(Qt.QMainWindow, frmMain.Ui_MainWindow):
 				self.statusBar().addPermanentWidget(self.statusWidget, 1)
 
 				# menu actions
-				self.connect(self.actionQuit, Qt.SIGNAL('triggered()'),
+				try:
+						self.actionQuit.triggered.connect(self.close)
+				except Exception:
+						self.connect(self.actionQuit, Qt.SIGNAL('triggered()'),
 										 Qt.SLOT('close()'))
 				self.connect(self.actionShow_Log, Qt.SIGNAL('triggered()'),
 										 self.statusWidget.showLogEntries)
@@ -241,19 +289,12 @@ class MainWindow(Qt.QMainWindow, frmMain.Ui_MainWindow):
 						RemoteClient = False
 
 				# get command line options
-				parser = OptionParser()
-				parser.add_option("-m", "--modules", dest="ModuleFile",
-													help="Instantiate modules from separate module definition file MODULEFILE. "
-															 "InstantiateModules() from this file will be called." )
-				parser.add_option("-c", "--configfile", dest="ConfigurationFile",
-													help="Load CONFIGURATIONFILE instead of last configuration.")
-				parser.add_option("-r", "--runas", dest="RunAs", default="",
-													help="Specify the module configuration that should be used.")
-				parser.add_option("-o", "--options", dest="Options", default="",
-													help="General options: R - start the remote server")
+				parser = create_option_parser()
 				try:
 						self.cmd_options, args = parser.parse_args()
-				except:
+				except SystemExit:
+						raise
+				except Exception:
 						raise Exception("Command line parser error !")
 				# merge run configuration with old style
 				if self.cmd_options.RunAs == "" and RemoteClient:
@@ -838,7 +879,7 @@ class MainWindow(Qt.QMainWindow, frmMain.Ui_MainWindow):
 								if event.type == EventType.STATUS:
 										# log battery voltage
 										if event.status_field == "Battery":
-												t = time.clock()
+												t = time.perf_counter()
 												if (t - self.battery_timer >= 59) and (self.battery_mode >= 0):
 														voltage = float(event.info.split("V")[0])
 														level = '?'
@@ -864,7 +905,7 @@ class MainWindow(Qt.QMainWindow, frmMain.Ui_MainWindow):
 												event.info += "\nLOG"
 										# update recording mode
 										if event.status_field == "Mode":
-												self.battery_timer = time.clock() - 60.0
+												self.battery_timer = time.perf_counter() - 60.0
 												self.battery_mode = event.info
 												if event.info < 0:
 														self.battery_logmode = event.info
@@ -881,7 +922,7 @@ class MainWindow(Qt.QMainWindow, frmMain.Ui_MainWindow):
 				except AttributeError:
 						# enable battery log with command line option -rBL or if it is forced
 						self.battery_log = (self.cmd_options.RunAs == "BL") or (ForceBatteryLogging)
-						self.battery_timer = time.clock() - 60.0
+						self.battery_timer = time.perf_counter() - 60.0
 						self.battery_ampSN = "???"
 						self.battery_rate = "???"
 						self.battery_mode = -1
@@ -897,7 +938,7 @@ class MainWindow(Qt.QMainWindow, frmMain.Ui_MainWindow):
 						logdir = Qt.QDir(logpath)
 						if not logdir.exists():
 								if self.battery_log:
-										print "Battery Log is disabled because the log directory (%s) doesn't exist"%logpath
+										print("Battery Log is disabled because the log directory (%s) doesn't exist"%logpath)
 								self.battery_log = False
 						else:
 								fname = "CHampBattery_"
@@ -934,9 +975,9 @@ class MainWindow(Qt.QMainWindow, frmMain.Ui_MainWindow):
 								self.battery_logfile = logfile
 
 								if self.battery_log:
-										print "Battery Log to %s is enabled"%self.battery_logfile
+										print("Battery Log to %s is enabled"%self.battery_logfile)
 				except Exception as e:
-						print e
+						print(e)
 						self.battery_log = False
 
 
@@ -991,7 +1032,7 @@ class DlgLogView(Qt.QDialog, frmLogView.Ui_frmLogView):
 		''' Show all log entries as plain text
 		'''
 		def __init__(self, *args):
-				apply(Qt.QDialog.__init__, (self,) + args)
+				Qt.QDialog.__init__(self, *args)
 				self.setupUi(self)
 
 		def setLogEntry(self, entry):
@@ -1304,11 +1345,11 @@ def setpriority(priority=2):
 								cpu += 1
 						mask = mask << 1
 				kernel32.SetProcessAffinityMask(p, pmask)
-				print "INFO: Available CPUs (bit mask) 0x%04X, Python process limited to 0x%04X"%(smask, pmask)
+				print("INFO: Available CPUs (bit mask) 0x%04X, Python process limited to 0x%04X"%(smask, pmask))
 
 		except Exception as e:
 				tb = GetExceptionTraceBack()[0]
-				print "INFO: the process priority can not be raised because PyWin32 is not installed or an error occurred.\n      - %s->%s"%(tb, str(e))
+				print("INFO: the process priority can not be raised because PyWin32 is not installed or an error occurred.\n      - %s->%s"%(tb, str(e)))
 
 
 '''
@@ -1319,36 +1360,84 @@ MAIN APPLICATION
 def main(args):
 		''' Create and start up main application
 		'''
-		print "Starting PyCorder, please wait ...\n"
+		if ("-h" in args) or ("--help" in args):
+				create_option_parser().print_help()
+				return 0
+
+		smoketest_requested = ("--smoketest" in args)
+		smoketest_ms = 1500
+		if smoketest_requested:
+				try:
+						smoke_opts, _ = create_option_parser().parse_args(args[1:])
+						smoketest_ms = max(100, int(getattr(smoke_opts, "SmokeTestMs", 1500)))
+				except SystemExit:
+						return 0
+				except Exception:
+						smoketest_ms = 1500
+
+		print("Starting PyCorder, please wait ...\n")
 		setpriority(priority=4)
 		app = Qt.QApplication(args)
+		rc = 0
+		try:
+				from res import resources_rc as _resources_rc
+		except ImportError:
+				_resources_rc = None
+		if _resources_rc is not None:
+				_resources_rc.qInitResources()
+		if smoketest_requested:
+				QtCore.QTimer.singleShot(smoketest_ms, app.quit)
+				rc = app.exec_()
+				print("PyCorder smoketest completed\n")
+				return rc
 		try:
 				win = None
 				win = MainWindow()
-				win.showMaximized()
+				win.show()
+				try:
+						win.showMaximized()
+				except Exception:
+						pass
+				try:
+						platform_name = ""
+						if hasattr(Qt.QApplication, "platformName"):
+								platform_name = str(Qt.QApplication.platformName()).lower()
+						if platform_name not in ("offscreen", "minimal"):
+								win.raise_()
+								win.activateWindow()
+								QtCore.QTimer.singleShot(0, win.raise_)
+								QtCore.QTimer.singleShot(0, win.activateWindow)
+				except Exception:
+						pass
 				if ShowConfirmationDialog:
 						accept = Qt.QMessageBox.warning(None, "PyCorder Disclaimer", ConfirmationText,
 																						"Accept", "Cancel", "", 1)
 						if accept == 0:
 								win.usageConfirmed = True
-								app.exec_()
+								rc = app.exec_()
 						else:
 								win.close()
 				else:
 						win.usageConfirmed = True
-						app.exec_()
+						rc = app.exec_()
 		except Exception as e:
 				tb = GetExceptionTraceBack()[0]
+				try:
+						print("PyCorder startup error: %s -> %s"%(tb, str(e)), file=sys.stderr)
+				except Exception:
+						pass
 				Qt.QMessageBox.critical(None, "PyCorder", tb + " -> " + str(e))
 				if win != None:
 						win.close()
+				return 1
 
 		# show the battery disconnection reminder
 		if ShowBatteryReminder and win and win.usageConfirmed:
 				DlgBatteryInfo().exec_()
 
-		print "PyCorder terminated\n"
+		print("PyCorder terminated\n")
+		return rc
 
 
 if __name__ == '__main__':
-		main(sys.argv)
+		sys.exit(main(sys.argv))

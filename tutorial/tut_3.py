@@ -195,7 +195,7 @@ class TUT_3(ModuleBase):
         
         # create channel selection indices from channel FiFo
         mask = lambda x: (x.name in self.channelFifo)
-        channel_ref = np.array(map(mask, self.params.channel_properties))
+        channel_ref = np.array([mask(ch) for ch in self.params.channel_properties], dtype=bool)
         self.channel_index = np.nonzero(channel_ref)
         
         # create empty calculation buffers
@@ -303,7 +303,7 @@ class _OnlineCfgPane(Qt.QFrame):
     ''' Online configuration pane
     '''
     def __init__(self , *args):
-        apply(Qt.QFrame.__init__, (self,) + args)
+        Qt.QFrame.__init__(self, *args)
 
         # make it nice ;-)
         self.setFrameShape(QtGui.QFrame.Panel)
@@ -402,7 +402,7 @@ class _SignalPane(Qt.QFrame):
     ''' FFT display pane
     '''
     def __init__(self , *args):
-        apply(Qt.QFrame.__init__, (self,) + args)
+        Qt.QFrame.__init__(self, *args)
 
         # Initialize local variables
         self.data_queue = Queue.Queue(10)       # data exchange queue
@@ -548,7 +548,7 @@ class _ConfigurationPane(Qt.QFrame):
     Tab for global configuration dialog, contains only one item: "Max. number of plot items"
     '''
     def __init__(self, module, *args):
-        apply(Qt.QFrame.__init__, (self,) + args)
+        Qt.QFrame.__init__(self, *args)
         
         # reference to our parent module (TUT_3)
         self.module = module
@@ -595,4 +595,5 @@ class _ConfigurationPane(Qt.QFrame):
         ''' Event handler for changes in "number of plot items"
         '''
         self.module.plot_items = index + 1  # update the TUT_3 module parameter
+        
         

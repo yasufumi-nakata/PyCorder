@@ -28,10 +28,7 @@ class Ui_frmRdaClientOnline(object):
         self.pushButtonConnect = QtGui.QPushButton(self.groupBoxMode)
         self.pushButtonConnect.setMinimumSize(QtCore.QSize(150, 40))
         self.pushButtonConnect.setStyleSheet("text-align: left; padding-left: 10px;")
-        icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icons/play.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        icon.addPixmap(QtGui.QPixmap(":/icons/play_green.png"), QtGui.QIcon.Normal, QtGui.QIcon.On)
-        self.pushButtonConnect.setIcon(icon)
+        self.pushButtonConnect.setIcon(QtGui.QIcon(":/icons/play.png"))
         self.pushButtonConnect.setIconSize(QtCore.QSize(32, 32))
         self.pushButtonConnect.setCheckable(True)
         self.pushButtonConnect.setAutoExclusive(True)
@@ -89,4 +86,7 @@ class Ui_frmRdaClientOnline(object):
         self.pushButtonRemove.setToolTip(QtGui.QApplication.translate("frmRdaClientOnline", "Remove IP from List", None, QtGui.QApplication.UnicodeUTF8))
         self.pushButtonRemove.setText(QtGui.QApplication.translate("frmRdaClientOnline", "-", None, QtGui.QApplication.UnicodeUTF8))
 
-import resources_rc
+try:
+    import resources_rc
+except ImportError:
+    from res import resources_rc

@@ -86,7 +86,7 @@ class HardwareInputDevice():
         '''
         # get the required channel indices
         mask = lambda x: (x.inputgroup == self.inputGroup) and (x.input in self.inputChannels)
-        ch_map = np.array(map(mask, params.channel_properties))
+        ch_map = np.array([mask(ch) for ch in params.channel_properties], dtype=bool)
         indices = np.nonzero(ch_map)[0]     # indices of required channels
         # dictionary with channel number as key and its index in the input data array as value
         idx = dict((x.input, indices[i]) for i, x in enumerate(params.channel_properties[indices]))
@@ -138,7 +138,7 @@ class HardwareInputDevice():
         '''
         # the default implementation enables all output channels
         mask = lambda x: True
-        ch_map = np.array(map(mask, self.outputProperties))
+        ch_map = np.array([mask(ch) for ch in self.outputProperties], dtype=bool)
         # indices of enabled output channels
         indices = np.nonzero(ch_map)[0]     
         return indices
@@ -211,7 +211,7 @@ class HardwareInputDevice():
         # check version, has to be lower or equal than current version
         version = xml.get("version")
         if (version == None) or (int(version) > self.xmlVersion):
-            raise Exception, "Device %s wrong version > %d"%(self.deviceName, self.xmlVersion)
+            raise Exception("Device %s wrong version > %d"%(self.deviceName, self.xmlVersion))
         version = int(version)
         
         # get the values
@@ -252,7 +252,6 @@ class DeviceConfigDlg(Qt.QDialog):
 
         self.connect(self.buttonBox, Qt.SIGNAL("accepted()"), self.accept)
         self.connect(self.buttonBox, Qt.SIGNAL("rejected()"), self.reject)
-
 
 
 

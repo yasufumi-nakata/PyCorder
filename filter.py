@@ -323,7 +323,7 @@ class _ConfigurationPane(Qt.QFrame, frmFilterConfig.Ui_frmFilterConfig):
     def __init__(self, filter, *args):
         ''' Constructor
         '''
-        apply(Qt.QFrame.__init__, (self,) + args)
+        Qt.QFrame.__init__(self, *args)
         self.setupUi(self)
         self.tableView.horizontalHeader().setResizeMode(Qt.QHeaderView.ResizeToContents)
 
@@ -391,7 +391,7 @@ class _ConfigurationPane(Qt.QFrame, frmFilterConfig.Ui_frmFilterConfig):
         '''
         # AUX channel table
         mask = lambda x: x.group != ChannelGroup.EEG
-        ch_map = np.array(map(mask, self.filter.params.channel_properties))
+        ch_map = np.array([mask(ch) for ch in self.filter.params.channel_properties], dtype=bool)
         ch_indices = np.nonzero(ch_map)[0]     
         self.table_model = _ConfigTableModel(self.filter.params.channel_properties[ch_indices])
         self.tableView.setModel(self.table_model)
@@ -671,5 +671,4 @@ class _ConfigItemDelegate(Qt.QStyledItemDelegate):
 
     def emitCommitData(self):
         self.emit(Qt.SIGNAL('commitData(QWidget*)'), self.sender())
-
 

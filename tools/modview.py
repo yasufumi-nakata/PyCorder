@@ -75,18 +75,24 @@ class GenericTableWidget(Qt.QTableView):
     def __init__(self, *args, **kwargs):
         ''' Constructor
         '''
-        apply(Qt.QTableView.__init__, (self,) + args)
+        Qt.QTableView.__init__(self, *args)
 
         self.setAlternatingRowColors(True)
         #self.setObjectName("tableViewGeneric")
         #self.horizontalHeader().setCascadingSectionResizes(False)
         self.horizontalHeader().setStretchLastSection(True)
-        self.horizontalHeader().setResizeMode(Qt.QHeaderView.ResizeToContents)
+        try:
+            self.horizontalHeader().setResizeMode(Qt.QHeaderView.ResizeToContents)
+        except AttributeError:
+            self.horizontalHeader().setSectionResizeMode(Qt.QHeaderView.ResizeToContents)
         if "RowNumbers" in kwargs:
             self.verticalHeader().setVisible(kwargs["RowNumbers"])
         else:
             self.verticalHeader().setVisible(False)
-        self.verticalHeader().setResizeMode(Qt.QHeaderView.ResizeToContents)
+        try:
+            self.verticalHeader().setResizeMode(Qt.QHeaderView.ResizeToContents)
+        except AttributeError:
+            self.verticalHeader().setSectionResizeMode(Qt.QHeaderView.ResizeToContents)
         if "SelectionBehavior" in kwargs:
             self.setSelectionBehavior(kwargs["SelectionBehavior"])
         self.setSelectionMode(Qt.QAbstractItemView.ExtendedSelection)
@@ -225,7 +231,7 @@ class _DataTableModel(Qt.QAbstractTableModel):
         if hasattr(data, variable_name):
             d = Qt.QVariant(vars(data)[variable_name])
             # get value from combobox list values?
-            if self.columns[column].has_key('indexed') and self.cblist.has_key(variable_name):
+            if ('indexed' in self.columns[column]) and (variable_name in self.cblist):
                 idx, ok = d.toInt()
                 if ok and idx >=0 and idx < len(self.cblist[variable_name]):
                     d = Qt.QVariant(self.cblist[variable_name][idx])
@@ -250,7 +256,7 @@ class _DataTableModel(Qt.QAbstractTableModel):
         variable_name = self.columns[column]['variable']
 
         # get index from combobox list values
-        if self.columns[column].has_key('indexed') and self.cblist.has_key(variable_name):
+        if ('indexed' in self.columns[column]) and (variable_name in self.cblist):
             v = value.toString()
             if v in self.cblist[variable_name]:
                 value = Qt.QVariant(self.cblist[variable_name].index(v))
@@ -269,7 +275,7 @@ class _DataTableModel(Qt.QAbstractTableModel):
             elif t is int:
                 vars(data)[variable_name] = value.toInt()[0]
                 return True
-            elif t in types.StringTypes:
+            elif isinstance(vars(data)[variable_name], str):
                 vars(data)[variable_name] = "%s" % value.toString()
                 return True
             else:
@@ -293,7 +299,7 @@ class _DataTableModel(Qt.QAbstractTableModel):
         ''' 
         if column >= len(self.columns):
             return Qt.QVariant()
-        if self.columns[column].has_key('min'):
+        if 'min' in self.columns[column]:
             return Qt.QVariant(self.columns[column]['min'])
         else:
             return Qt.QVariant()
@@ -305,7 +311,7 @@ class _DataTableModel(Qt.QAbstractTableModel):
         ''' 
         if column >= len(self.columns):
             return Qt.QVariant()
-        if self.columns[column].has_key('max'):
+        if 'max' in self.columns[column]:
             return Qt.QVariant(self.columns[column]['max'])
         else:
             return Qt.QVariant()
@@ -317,7 +323,7 @@ class _DataTableModel(Qt.QAbstractTableModel):
         ''' 
         if column >= len(self.columns):
             return Qt.QVariant()
-        if self.columns[column].has_key('dec'):
+        if 'dec' in self.columns[column]:
             return Qt.QVariant(self.columns[column]['dec'])
         else:
             return Qt.QVariant()
@@ -329,7 +335,7 @@ class _DataTableModel(Qt.QAbstractTableModel):
         ''' 
         if column >= len(self.columns):
             return Qt.QVariant()
-        if self.columns[column].has_key('step'):
+        if 'step' in self.columns[column]:
             return Qt.QVariant(self.columns[column]['step'])
         else:
             return Qt.QVariant()
@@ -346,7 +352,7 @@ class _DataTableModel(Qt.QAbstractTableModel):
         # get variable name from column description
         variable_name = self.columns[column]['variable']
         # lookup list in dictionary
-        if self.cblist.has_key(variable_name):
+        if variable_name in self.cblist:
             return Qt.QVariant(self.cblist[variable_name])
         else:
             return Qt.QVariant()
@@ -522,7 +528,7 @@ class _DataItemDelegate(Qt.QStyledItemDelegate):
             if d.isValid():
                 if d.type() == Qt.QMetaType.QString:
                     # find matching list item text
-                    idx = editor.findText(d.toString())
+                    idx = editor.findText(str(d.toString()))
                     if idx == -1:
                         idx = 0
                 else:
@@ -531,7 +537,10 @@ class _DataItemDelegate(Qt.QStyledItemDelegate):
                     # get item list
                     itemlist = []
                     for i in range(editor.count()):
-                        itemlist.append(editor.itemText(i).toDouble()[0])
+                        try:
+                            itemlist.append(editor.itemText(i).toDouble()[0])
+                        except AttributeError:
+                            itemlist.append(float(editor.itemText(i)))
                     # find index
                     idx = closest(d.toDouble()[0], itemlist)[0]
             

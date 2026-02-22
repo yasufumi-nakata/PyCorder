@@ -108,12 +108,12 @@ class MNT_Recording(ModuleBase):
         
         # get all active eeg channel indices (excluding reference channels)
         mask = lambda x: (x.group == ChannelGroup.EEG) and x.enable and not x.isReference
-        channel_map = np.array(map(mask, properties))
+        channel_map = np.array([mask(ch) for ch in properties], dtype=bool)
         self.eeg_indices = np.nonzero(channel_map)[0]     # indices of all eeg channels
 
         # get the reference channel indices
         mask = lambda x: (x.group == ChannelGroup.EEG) and x.isReference
-        channel_map = np.array(map(mask, properties))
+        channel_map = np.array([mask(ch) for ch in properties], dtype=bool)
         self.ref_indices = np.nonzero(channel_map)[0]     # indices of reference channel(s)
         
         # get output channel indices, depending on recording mode
@@ -128,7 +128,7 @@ class MNT_Recording(ModuleBase):
                 # get all enabled channel indices, including enabled reference channels
                 mask = lambda x: (x.enable == True)
                 
-        channel_map = np.array(map(mask, properties))
+        channel_map = np.array([mask(ch) for ch in properties], dtype=bool)
         self.output_channel_indices = np.nonzero(channel_map)[0]     # indices of all enabled channels
 
         # append "REF" to the reference channel name and create the combined reference channel name
@@ -345,9 +345,9 @@ class Montage():
         @param channel: EEG_ChannelProperties object
         @return: True if channel entry available
         '''
-        return self.channel_dict.has_key(channel.inputgroup) and\
-             self.channel_dict[channel.inputgroup].has_key(channel.input) and\
-             self.channel_dict[channel.inputgroup][channel.input].has_key(channel.group) 
+        return (channel.inputgroup in self.channel_dict) and\
+             (channel.input in self.channel_dict[channel.inputgroup]) and\
+             (channel.group in self.channel_dict[channel.inputgroup][channel.input]) 
              
 
     def get_channel(self, channel):
@@ -426,7 +426,7 @@ class _ConfigurationPane(Qt.QFrame):
     ''' Amplifier Test Module configuration pane.
     '''
     def __init__(self, module, *args):
-        apply(Qt.QFrame.__init__, (self,) + args)
+        Qt.QFrame.__init__(self, *args)
         
         # reference to our parent module
         self.module = module
@@ -510,7 +510,7 @@ class _ConfigurationPane(Qt.QFrame):
         if col == 5:
             name = data[row].name.lower()
             enable = data[row].enable
-            if enable and self.labelDictionary.has_key(name) and self.labelDictionary[name] > 1:
+            if enable and (name in self.labelDictionary) and self.labelDictionary[name] > 1:
                 return False
         return True
 
@@ -518,7 +518,7 @@ class _ConfigurationPane(Qt.QFrame):
         if col == 4:
             name = data[row].name.lower()
             enable = data[row].enable
-            if enable and self.labelDictionary.has_key(name) and self.labelDictionary[name] > 1:
+            if enable and (name in self.labelDictionary) and self.labelDictionary[name] > 1:
                 return False
         return True
 
@@ -550,7 +550,7 @@ class _ConfigurationPane(Qt.QFrame):
     def resetChannelTables(self):
         # split montage table into eeg and other channels
         montage = self.module.getMontageList()
-        ch_map = np.array(map(lambda x: (x.group == ChannelGroup.EEG), montage))
+        ch_map = np.array([x.group == ChannelGroup.EEG for x in montage], dtype=bool)
         eeg_indices = np.nonzero(ch_map)[0]           # indices of all eeg channels
 
         if ch_map.shape[0]:
@@ -597,4 +597,3 @@ class _ConfigurationPane(Qt.QFrame):
 
 if __name__ == '__main__':
     pass
-

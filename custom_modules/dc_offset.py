@@ -85,10 +85,10 @@ class dc_offset(ModuleBase):
         else:
             self.signalPane.show()
           
-          #set the Scale of the DC offset plot
+    # set the Scale of the DC offset plot
     def setDCScale(self):
-		scale = self.onlinePane.getCurrentValues()
-		self.signalPane.setScale(scale)
+        scale = self.onlinePane.getCurrentValues()
+        self.signalPane.setScale(scale)
 		
     def process_input(self, datablock):
         ''' Get data from previous module.
@@ -103,10 +103,9 @@ class dc_offset(ModuleBase):
         #but only if the pane is visible
         
         if self.signalPane.isVisible():
-     	    dc_offsets = np.mean(datablock.eeg_channels,1)/1000 #Convert from uV to mV
-     	    chan_indices = [x + 1 for x in range(datablock.channel_properties.shape[0])]
-     	    
-     	    self.signalPane.DCValues.setData(chan_indices,dc_offsets)
+            dc_offsets = np.mean(datablock.eeg_channels,1)/1000 #Convert from uV to mV
+            chan_indices = [x + 1 for x in range(datablock.channel_properties.shape[0])]
+            self.signalPane.DCValues.setData(chan_indices,dc_offsets)
             
             
     def process_output(self):
@@ -118,12 +117,12 @@ class dc_offset(ModuleBase):
         return self.data
 		
     def process_update(self, params):
-    	if params != None:
-        		#Set the width of the pen for DC offset plot based on the dimensions of the window
-		#and the number of channels
+        if params != None:
+            # Set the width of the pen for DC offset plot based on the dimensions of the window
+            # and the number of channels
             num_channels = params.channel_properties.shape[0]
-            frame_width = self.signalPane.width()	
-		#Calculate sensible value for line width, so that bars don't overlap
+            frame_width = self.signalPane.width()
+            # Calculate sensible value for line width, so that bars don't overlap
             new_pen_width = 0.9*frame_width/ (2*num_channels)
             self.signalPane.setLineWidth(new_pen_width)
 
@@ -136,9 +135,9 @@ class dc_offset(ModuleBase):
         return self.onlinePane
 		
     def get_display_pane(self):
-	''' Get the signal pane
-	@return: a QFrame object
-	'''
+        ''' Get the signal pane
+        @return: a QFrame object
+        '''
         return self.signalPane
     
 ################################################################
@@ -148,7 +147,7 @@ class _OnlineCfgPane(Qt.QFrame):
     ''' Online configuration pane
     '''
     def __init__(self , *args):
-        apply(Qt.QFrame.__init__, (self,) + args)
+        Qt.QFrame.__init__(self, *args)
 
         # make it nice ;-)
         self.setFrameShape(QtGui.QFrame.Panel)
@@ -194,7 +193,13 @@ class _OnlineCfgPane(Qt.QFrame):
         self.comboBoxScale.setCurrentIndex(1)
     
     def getCurrentValues(self):
-    	scale,ok = self.comboBoxScale.currentText().toFloat()
+        text = self.comboBoxScale.currentText()
+        try:
+            scale = float(text)
+            ok = True
+        except Exception:
+            scale = 1.0
+            ok = False
         return scale
        
 		################################################################
@@ -204,7 +209,7 @@ class  _SignalPane(Qt.QFrame):
     ''' FFT display pane
     '''
     def __init__(self , *args):
-        apply(Qt.QFrame.__init__, (self,) + args)
+        Qt.QFrame.__init__(self, *args)
 		
         self.setMinimumSize(Qt.QSize(200,50))
 
@@ -250,7 +255,6 @@ class  _SignalPane(Qt.QFrame):
         self.DCplot.setAxisScale(0,-scale,scale)
         
     def setLineWidth(self,width):
-    	
         self.DCValues.setPen(Qt.QPen(Qt.Qt.red, width, Qt.Qt.SolidLine))
 
     def timerEvent(self,e):

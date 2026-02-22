@@ -215,7 +215,7 @@ class DeviceContainer(Qt.QObject):
         # check version, has to be lower or equal than current version
         version = xml.InputDevices.get("version")
         if (version == None) or (int(version) > self.xmlVersion):
-            raise Exception, "Input Device Configuration: wrong version > %d"%(self.xmlVersion)
+            raise Exception("Input Device Configuration: wrong version > %d"%(self.xmlVersion))
         version = int(version)
         
         # get and instantiate the input devices
@@ -231,7 +231,7 @@ class DeviceContainer(Qt.QObject):
                 if not overlapping:
                     self.instantiatedDevices.append(d)
                 else:
-                    raise Exception, "Can't connect %s: "%(d.description)+"Required input channels are already in use by other devices"
+                    raise Exception("Can't connect %s: "%(d.description)+"Required input channels are already in use by other devices")
 
 
 

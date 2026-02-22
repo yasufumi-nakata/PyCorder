@@ -61,27 +61,6 @@ class StorageVision(ModuleBase):
 
         # get OS architecture (32/64-bit)
         self.x64 = ("64" in platform.architecture()[0])
-
-        # load C library 
-        try: 
-            self.libc = ct.cdll.msvcrt # Windows 
-        except: 
-            self.libc = ct.CDLL("libc.so.6") # Linux 
-
-        # set error handling for C library
-        def errcheck(res, func, args): 
-            if not res: 
-                raise IOError 
-            return res 
-        self.libc._wfopen.errcheck = errcheck 
-        if self.x64:
-            self.libc._wfopen.restype = ct.c_int64
-            self.libc.fwrite.argtypes = [ct.c_void_p, ct.c_size_t, ct.c_size_t, ct.c_int64] 
-            self.libc.fclose.argtypes = [ct.c_int64] 
-        else:
-            self.libc._wfopen.restype = ct.c_void_p 
-            self.libc.fwrite.argtypes = [ct.c_void_p, ct.c_size_t, ct.c_size_t, ct.c_void_p] 
-            self.libc.fclose.argtypes = [ct.c_void_p] 
          
         self.data = None
         self.dataavailable = False
@@ -95,7 +74,7 @@ class StorageVision(ModuleBase):
         
         # output files
         self.file_name = None       #: output file name
-        self.data_file = 0          #: clib data file handle
+        self.data_file = None       #: python file handle
         self.header_file = 0        #: header file handle
         self.marker_file = 0        #: marker file handle
         self.marker_counter = 0     #: total number of markers written
@@ -221,7 +200,7 @@ class StorageVision(ModuleBase):
         ''' 
         if freespace > 0:
             return True
-        if self.data_file != 0:
+        if self.data_file is not None:
             # stop recording
             self.write_error = True
             self._close_recording()
@@ -313,7 +292,7 @@ class StorageVision(ModuleBase):
         '''
         try:
             # is recording active?
-            if self.data_file != 0:
+            if self.data_file is not None:
                 if self.process_query("Stop"):
                     self._close_recording()
                 else:
@@ -513,7 +492,8 @@ class StorageVision(ModuleBase):
             # create EEG data file
             try:
                 self._thLock.acquire()
-                self.data_file = self.libc._wfopen(unicode(self.file_name), u"wb")
+                # Python標準I/Oでバイナリ書き込み
+                self.data_file = open(self.file_name, "wb")
                 self.write_error = False
             except IOError as e:
                 self.header_file.close()
@@ -536,14 +516,14 @@ class StorageVision(ModuleBase):
         ''' Close all EEG files
         '''
         self._thLock.acquire()
-        if self.data_file != 0:
+        if self.data_file is not None:
             try:
-                self.libc.fclose(self.data_file)
+                self.data_file.close()
                 self.marker_file.close()
             except Exception as e:
-                print "Failed to close recording files: " + str(e)
-            self.data_file = 0
-            self.data_file = 0
+                print("Failed to close recording files: " + str(e))
+            self.data_file = None
+            self.data_file = None
             self.online_cfg.set_recording_state(False) 
         self._thLock.release() 
    
@@ -654,7 +634,7 @@ class StorageVision(ModuleBase):
             # check for start, cmd_value contains the EEG filename without extension
             if event.info == "StartSaving":
                 # quit if recording is already active or if we are in impendance mode
-                if self.data_file != 0 or self.params.recording_mode == RecordingMode.IMPEDANCE:
+                if self.data_file is not None or self.params.recording_mode == RecordingMode.IMPEDANCE:
                     return
                 try:
                     self.file_name = self._get_unique_filename(event.cmd_value)
@@ -685,7 +665,7 @@ class StorageVision(ModuleBase):
         @param command: command string
         @return: True if user confirms to stop recording to file 
         '''
-        if self.data_file == 0:
+        if self.data_file is None:
             return True
         if command == "Stop":
             ret = Qt.QMessageBox.question(None, "PyCorder", "Stop Recording?",
@@ -701,7 +681,7 @@ class StorageVision(ModuleBase):
         ''' Start data acquisition
         '''
         # reset sample counter check
-        self.missing_timer = time.clock()
+        self.missing_timer = time.perf_counter()
         self.missing_interval = 0
         self.missing_cumulated = 0
         self.next_samplecounter = -2
@@ -746,7 +726,7 @@ class StorageVision(ModuleBase):
             self.missing_interval += missing_samples
             self.missing_cumulated += missing_samples 
             sctBreakDiff = np.array([sct_check[sctBreak+1], sctDiff[sctBreak]]) # samplecounter / missing
-            if time.clock() - self.missing_timer > 30:            
+            if time.perf_counter() - self.missing_timer > 30:            
                 self.missing_interval = missing_samples
             #print "samples missing = %i, interval = %i, cumulated = %i"%(missing_samples, self.missing_interval, self.missing_cumulated) 
             error = "%d samples missing"%(missing_samples)
@@ -756,7 +736,7 @@ class StorageVision(ModuleBase):
                 self.missing_cumulated = 0
             else:
                 self.send_event(ModuleEvent(self._object_name, EventType.LOG, info=error))
-            self.missing_timer = time.clock()
+            self.missing_timer = time.perf_counter()
         else:
             missing_samples = 0
             sctBreakDiff = np.array([[],[]],dtype=np.int64)
@@ -765,16 +745,16 @@ class StorageVision(ModuleBase):
         self.next_samplecounter = self.data.sample_channel[0,-1]
 
 
-        if (self.data_file != 0) and not self.write_error:
+        if (self.data_file is not None) and not self.write_error:
             try:
-                t = time.clock()
+                t = time.perf_counter()
                 # convert data to float and write to data file
                 d = datablock.eeg_channels.transpose()
                 f = d.flatten().astype(np.float32)
                 sizeof_item = f.dtype.itemsize # item size in bytes
-                write_items = len(f)    # number of items to write  
-                nitems  = self.libc.fwrite(f.tostring(), sizeof_item, write_items, self.data_file)
-                if nitems != write_items:
+                # Python I/O: write bytes directly
+                nbytes_written = self.data_file.write(f.tobytes())
+                if nbytes_written != sizeof_item * len(f):
                     raise ModuleError(self._object_name, "Write to file %s failed"%(self.file_name))
                 # write marker
                 #self._write_marker(self.data.markers, self.data.block_time, self.data.sample_channel[0,0])
@@ -783,7 +763,7 @@ class StorageVision(ModuleBase):
                 # update file sample counter
                 self.samples_written += samples
                 
-                writetime = time.clock() - t
+                writetime = time.perf_counter() - t
                 #print "Write file: %.0f ms / %d Bytes / QSize %d"%(writetime*1000.0, nitems, self._input_queue.qsize()) 
             except Exception as e:
                 self.write_error = True     # indicate write error
@@ -820,7 +800,7 @@ class _OnlineCfgPane(Qt.QFrame, frmStorageVisionOnline.Ui_frmStorageVisionOnline
         ''' Constructor
         @param module: parent module
         '''
-        apply(Qt.QFrame.__init__, (self,) + args)
+        Qt.QFrame.__init__(self, *args)
         self.setupUi(self)
         self.module = module
 
@@ -857,7 +837,7 @@ class _OnlineCfgPane(Qt.QFrame, frmStorageVisionOnline.Ui_frmStorageVisionOnline
         ''' Display update timer event
         '''
         # calculate available disk size
-        path = unicode(self.lineEditPath.text())
+        path = str(self.lineEditPath.text())
         if len(path) > 0:
             free, total = self.module.get_free_space(path)
             if total > 0 and free > 0:
@@ -942,7 +922,7 @@ class _ConfigurationPane(Qt.QFrame, frmStorageVisionConfig.Ui_frmStorageVisionCo
         ''' Constructor
         @param storage: parent module
         '''
-        apply(Qt.QFrame.__init__, (self,) + args)
+        Qt.QFrame.__init__(self, *args)
         self.setupUi(self)
 
         # set validators
@@ -973,8 +953,8 @@ class _ConfigurationPane(Qt.QFrame, frmStorageVisionConfig.Ui_frmStorageVisionCo
     def _contentChanged(self):
         ''' Update parent object vars
         '''
-        self.storage.default_path = unicode(self.lineEditFolder.displayText())
-        self.storage.default_prefix = unicode(self.lineEditPrefix.displayText()).lstrip()
+        self.storage.default_path = str(self.lineEditFolder.displayText())
+        self.storage.default_prefix = str(self.lineEditPrefix.displayText()).lstrip()
         self.lineEditPrefix.setText(self.storage.default_prefix)
         self.storage.default_numbersize = self.lineEditCounterSize.displayText().toInt()[0]
         self.storage.default_autoname = self.checkBoxAutoFile.isChecked()
@@ -990,7 +970,7 @@ class _ConfigurationPane(Qt.QFrame, frmStorageVisionConfig.Ui_frmStorageVisionCo
         dlg.setAcceptMode(Qt.QFileDialog.AcceptOpen)
         if dlg.exec_() == True:
             files = dlg.selectedFiles()
-            file_name = unicode(files[0])
+            file_name = str(files[0])
             self.lineEditFolder.setText(file_name)
             self._contentChanged()
         

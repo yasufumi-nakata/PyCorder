@@ -36,7 +36,10 @@ from PyQt4 import Qt
 import numpy as np
 import time
 import datetime
-import Queue
+try:
+    import Queue as queue
+except ImportError:
+    import queue
 import threading
 import copy
 import os, sys, traceback
@@ -209,7 +212,7 @@ class EEG_ChannelProperties(object):
         # check version, has to be lower or equal than current version
         version = xml.get("version")
         if (version == None) or (int(version) > self.xmlVersion):
-            raise Exception, "channel %d wrong version > %d"%(self.input, self.xmlVersion)
+            raise Exception("channel %d wrong version > %d"%(self.input, self.xmlVersion))
         version = int(version)
         
         # get the values
@@ -340,7 +343,13 @@ class ModuleBase(Qt.QObject):
         @param name: module object identifier 
         @param instance: instance number for this object
         '''
-        Qt.QObject.__init__(self)
+        # PySide6 raises a RuntimeError when QObject is initialized twice.
+        # This can happen for UI modules that inherit both QWidget/QwtPlot and ModuleBase.
+        try:
+            Qt.QObject.__init__(self)
+        except RuntimeError as exc:
+            if "QObject object in class" not in str(exc) or "twice" not in str(exc):
+                raise
         # set identifier and instance
         self._object_name = name
         self._instance = instance
@@ -348,7 +357,7 @@ class ModuleBase(Qt.QObject):
         self._receivers = [] 
 
         # receiver input queue and data block
-        self._input_queue = Queue.Queue(queuesize)
+        self._input_queue = queue.Queue(queuesize)
         self._input_data = EEG_DataBlock()
 
         # reset the I/O worker thread
@@ -632,11 +641,11 @@ class ModuleBase(Qt.QObject):
             self._thLock.acquire()
             try:
                 data = self._input_queue.get(False)
-                t = time.clock() 
+                t = time.perf_counter() 
                 self.process_input(data)
-                wt += time.clock() - t
+                wt += time.perf_counter() - t
                 self._thLock.release()
-            except Queue.Empty:
+            except queue.Empty:
                 self._thLock.release()
             except Exception as e:
                 self._thLock.release()
@@ -646,9 +655,9 @@ class ModuleBase(Qt.QObject):
             # put data to all registered output queues
             self._thLock.acquire()
             try:
-                self.output_timer = time.clock() 
+                self.output_timer = time.perf_counter() 
                 data = self.process_output()
-                wt += time.clock() - self.output_timer
+                wt += time.perf_counter() - self.output_timer
                 self._thLock.release()
             except Exception as e:
                 self._thLock.release()

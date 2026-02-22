@@ -35,12 +35,18 @@ import ctypes.wintypes
 import _ctypes
 import numpy as np
 import time
-import ConfigParser
+try:
+    import ConfigParser as configparser
+except ImportError:
+    import configparser
 import platform
 
 # enable or disable the Python Signal Generator for simulation mode
 PYSIGGEN = False
 #PYSIGGEN = True
+# 非Windows環境では常にシミュレーションを許可
+if platform.system() != 'Windows':
+    PYSIGGEN = True
 
 
 # max integer
@@ -498,15 +504,21 @@ class ActiChamp(object):
         self.properties.RangeEeg = 0.819
         self.properties.RangeAux = 5.0
         
-        # load ActiChamp 32 or 64 bit windows library
+        # load ActiChamp 32 or 64 bit windows library (Windowsのみ)
         self.lib = None
-        self.loadLib()
+        try:
+            self.loadLib()
+        except Exception:
+            # 非WindowsやDLL未検出時はエミュレーション許容
+            self.EmulationMode = True
+            self.lib = None
 
-        # get and check DLL version
-        self.ampversion.read(self.lib, self.devicehandle) 
-        if self.ampversion.DLL() != CHAMP_VERSION:
-            raise AmpError("wrong ActiChamp DLL version (%X / %X)"%(self.ampversion.DLL(),
-                                                                    CHAMP_VERSION))
+        # get and check DLL version (ライブラリがある場合のみ)
+        if self.lib is not None:
+            self.ampversion.read(self.lib, self.devicehandle) 
+            if self.ampversion.DLL() != CHAMP_VERSION:
+                raise AmpError("wrong ActiChamp DLL version (%X / %X)"%(self.ampversion.DLL(),
+                                                                        CHAMP_VERSION))
             
         
         # try to open device and get device properties
@@ -559,6 +571,10 @@ class ActiChamp(object):
         if self.running:
             return
         if self.lib == None:
+            # 非Windows・未検出時はエミュレーションにフォールバック
+            if platform.system() != 'Windows':
+                self.EmulationMode = True
+                return
             raise AmpError("library ActiChamp_x86.dll not available")
 
         # check if device hardware is available
@@ -605,6 +621,8 @@ class ActiChamp(object):
         ''' Close hardware device
         '''
         if self.lib == None:
+            if platform.system() != 'Windows':
+                return
             raise AmpError("library ActiChamp_x86.dll not available")
         if self.devicehandle != 0:
             if self.running:
@@ -720,7 +738,7 @@ class ActiChamp(object):
         self.running = True
         self.readError = False
         self.sampleCounterAdjust = 0
-        self.BlockTimer = time.clock()
+        self.BlockTimer = time.perf_counter()
         
         # try to set the PLL input
         self.setPllInput()
@@ -757,7 +775,7 @@ class ActiChamp(object):
                             np.dtype(np.int32).itemsize
         requestedbytes = int(bytes_per_sample * sample_rate[self.settings.Rate] * interval)
 
-        t = time.clock()
+        t = time.perf_counter()
         
         # read data from device
         if not self.BlockingMode:
@@ -769,8 +787,8 @@ class ActiChamp(object):
                                               ctypes.byref(self.buffer, self.binning_offset), 
                                               requestedbytes)
             
-        blocktime = (time.clock() - self.BlockTimer)
-        self.BlockTimer = time.clock()
+        blocktime = (time.perf_counter() - self.BlockTimer)
+        self.BlockTimer = time.perf_counter()
         #print str(blocktime) + " : " + str(bytesread)
 
         #print str(t-self.lastt) + " : " + str(bytesread)
@@ -817,7 +835,7 @@ class ActiChamp(object):
 
         # extract the different channel types
         index = 0
-        eeg = np.array(y[indices], np.float)
+        eeg = np.array(y[indices], float)
         
         # get indices of disconnected electrodes (all values == ADC_MAX)
         # disconnected = np.nonzero(np.all(eeg == ADC_MAX, axis=1))    
@@ -860,7 +878,7 @@ class ActiChamp(object):
         if PYSIGGEN and self.EmulationMode:
             if not len(self.DummySignals):
                 # create dummy signals at the first read
-                sg = SignalGenerator(np.float)
+                sg = SignalGenerator(float)
                 sr = sample_rate[self.settings.Rate]
                 numchannels = eegcount+auxcount
                 '''
@@ -874,7 +892,7 @@ class ActiChamp(object):
                                                              100.0, 0.0, 
                                                              sr)
             # replace eeg with generated signals
-            sc32 = np.array(sct[0], dtype=np.int)
+            sc32 = np.array(sct[0], dtype=int)
             for c in range(len(eeg)):
                 eeg[c] = np.take(self.DummySignals[c], sc32, mode="wrap")
 
@@ -959,7 +977,7 @@ class ActiChamp(object):
         emulation = 0
         modules = 0
         try:
-            ini = ConfigParser.ConfigParser()
+            ini = configparser.ConfigParser()
             if self.x64:
                 filename = "ActiChamp_x64.dll.ini"
             else:
@@ -987,7 +1005,7 @@ class ActiChamp(object):
             return
 
         # write new settings to INI file
-        ini = ConfigParser.ConfigParser()
+        ini = configparser.ConfigParser()
         if self.x64:
             filename = "ActiChamp_x64.dll.ini"
         else:

@@ -77,7 +77,7 @@ class DeviceEpPreamp(HardwareInputDevice):
         @return: channel index array 
         '''
         mask = lambda x: x.gain != "off"
-        ch_map = np.array(map(mask, self.channelProperties))
+        ch_map = np.array([mask(ch) for ch in self.channelProperties], dtype=bool)
         # indices of enabled output channels
         indices = np.nonzero(ch_map)[0]     
         return indices
@@ -173,7 +173,7 @@ class DeviceEpPreamp(HardwareInputDevice):
         # check version, has to be lower or equal than current version
         version = xml.get("version")
         if (version == None) or (int(version) > self.xmlVersion):
-            raise Exception, "Device %s wrong version > %d"%(self.deviceName, self.xmlVersion)
+            raise Exception("Device %s wrong version > %d"%(self.deviceName, self.xmlVersion))
         version = int(version)
         
         # get the values
@@ -234,7 +234,6 @@ class EPPConfigDlg(Qt.QDialog):
 
         self.connect(self.buttonBox, Qt.SIGNAL("accepted()"), self.accept)
         self.connect(self.buttonBox, Qt.SIGNAL("rejected()"), self.reject)
-
 
 
 

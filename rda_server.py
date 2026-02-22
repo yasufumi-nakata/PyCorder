@@ -35,6 +35,17 @@ from select import *
 from struct import *
 from binascii import *
 from ctypes import *
+try:
+    import Queue as queue
+except ImportError:
+    import queue
+try:
+    unicode
+except NameError:
+    def unicode(obj, enc='utf-8'):
+        if isinstance(obj, bytes):
+            return obj.decode(enc)
+        return str(obj)
 
 class RDAMessageType:
     ''' RDA Message Types
@@ -330,8 +341,8 @@ class RDA_Server(ModuleBase):
                 mtype = marker.type.encode("utf-8") + "\0"
                 msize = hdr_marker.size + len(mdescription) + len(mtype)
                 mpos = marker.position - data.sample_channel[0][0] # marker position must be relative to this data block
-                mpos = long(np.int64(mpos))
-                mkr = bytearray(hdr_marker.pack(msize, mpos, long(marker.points), marker.channel))
+                mpos = int(np.int64(mpos))
+                mkr = bytearray(hdr_marker.pack(msize, mpos, int(marker.points), marker.channel))
                 mkr.extend(mtype)
                 mkr.extend(mdescription)
                 mkrbyte.extend(mkr)
@@ -497,7 +508,7 @@ class ClientConnection():
         '''
         self.sock = clientsock
         self.addr = addr
-        self.transmit_queue = Queue.Queue(20)
+        self.transmit_queue = queue.Queue(20)
         # start transmit thread
         self.connected = True
         self.clientthread = threading.Thread(target=self._transmit_thread)
@@ -531,10 +542,10 @@ class ClientConnection():
                     if len(wr) > 0:
                         sent = self.sock.send(data[totalsent:])
                         if sent == 0:
-                            raise RuntimeError, "socket connection broken"
+                            raise RuntimeError("socket connection broken")
                         totalsent = totalsent + sent
                 
-            except Queue.Empty:
+            except queue.Empty:
                 time.sleep(0.002)        # suspend thread (default = 2ms)
             except Exception as e:
                 self.connected = False

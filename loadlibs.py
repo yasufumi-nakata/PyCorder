@@ -38,63 +38,134 @@ CHECK LIBRARY DEPENDENCIES
 ------------------------------------------------------------
 '''
 
+import re
 import sys
 
 import_log = ""
 
-# required Python and library versions
-if sys.version_info[:2] == (2,7):
-    #import_log += "Untested PyCorder running on Python Version 2.7 !\r\n\r\n"
-    ver_Python = "2.7"
-    ver_NumPy =  ("1.8.2")
-    ver_SciPy =  ("0.14.0")
-    ver_PyQt =   ("4.8.6")
-    ver_PyQwt =  ("5.2.3",)
-    ver_lxml =   ("3.3.6")
-else:
-    ver_Python = "2.6"
-    ver_NumPy =  ("1.3.0", "1.4.1")
-    ver_SciPy =  ("0.7.1", "0.8.0")
-    ver_PyQt =   ("4.5.2", "4.6.3")
-    ver_PyQwt =  ("5.2.1",)
-    ver_lxml =   ("2.2.4", "2.2.7")
+missing_dependencies = []
+version_mismatches = []
 
-    
+MIN_PYTHON = (3, 9, 0)
+MINIMUM_VERSIONS = {
+    "NumPy": "1.20.0",
+    "SciPy": "1.8.0",
+    "PyQt": "6.2.0",
+    "PyQwt": "0.12.0",
+    "lxml": "4.6.0",
+}
+
+
+def _append(msg):
+    global import_log
+    import_log += msg
+    return msg
+
+
+def _record_missing(name, msg):
+    if name not in missing_dependencies:
+        missing_dependencies.append(name)
+    _append(msg)
+
+
+def _record_mismatch(name, msg):
+    if name not in version_mismatches:
+        version_mismatches.append(name)
+    _append(msg)
+
+
+def _to_version_tuple(version_string):
+    """Convert a loose version string into a comparable integer tuple."""
+    parts = []
+    for item in re.split(r"[^\d]+", str(version_string)):
+        if not item:
+            continue
+        parts.append(int(item))
+        if len(parts) >= 3:
+            break
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts)
+
+
+def _is_at_least(current, minimum):
+    return _to_version_tuple(current) >= _to_version_tuple(minimum)
+
+
+def _check_minimum(name, current, minimum):
+    if not _is_at_least(current, minimum):
+        _record_mismatch(
+            name,
+            "- %s is too old (%s), please install %s >= %s\r\n" % (name, current, name, minimum),
+        )
+
+
 # try to import python libraries, check versions
-if not ver_Python in sys.version:
-    import_log += "- Wrong Python version (%s), please install Python %s\r\n"%(sys.version, ver_Python) 
+if sys.version_info < MIN_PYTHON:
+    _record_mismatch(
+        "Python",
+        "- Python %i.%i+ is required (current: %s)\r\n"
+        % (MIN_PYTHON[0], MIN_PYTHON[1], sys.version.split()[0]),
+    )
+
 try:
     import numpy as np
-    if not np.__version__ in ver_NumPy:
-        import_log += "- Wrong NumPy version (%s), please install NumPy %s\r\n"%(np.__version__, ver_NumPy) 
+    _check_minimum("NumPy", np.__version__, MINIMUM_VERSIONS["NumPy"])
 except ImportError:
-    import_log += "- NumPy missing, please install NumPy %s\r\n"%(str(ver_NumPy))
+    _record_missing(
+        "NumPy",
+        "- NumPy missing, please install NumPy >= %s\r\n" % (MINIMUM_VERSIONS["NumPy"],),
+    )
 
 try:
     import scipy as sc
-    if not sc.__version__ in ver_SciPy:
-        import_log += "- Wrong SciPy version (%s), please install SciPy %s\r\n"%(sc.__version__, ver_SciPy) 
+    _check_minimum("SciPy", sc.__version__, MINIMUM_VERSIONS["SciPy"])
 except ImportError:
-    import_log += "- SciPy missing, please install SciPy %s\r\n"%(str(ver_SciPy))
+    _record_missing(
+        "SciPy",
+        "- SciPy missing, please install SciPy >= %s\r\n" % (MINIMUM_VERSIONS["SciPy"],),
+    )
 
 try:
     from PyQt4 import Qt
-    if not Qt.QT_VERSION_STR in ver_PyQt:
-        import_log += "- Wrong PyQt version (%s), please install PyQt %s\r\n"%(Qt.QT_VERSION_STR, ver_PyQt) 
+    qt_version = getattr(Qt, "QT_VERSION_STR", "0.0.0")
+    _check_minimum("PyQt", qt_version, MINIMUM_VERSIONS["PyQt"])
 except ImportError:
-    import_log += "- PyQt missing, please install PyQt %s\r\n"%(str(ver_PyQt))
+    _record_missing(
+        "PyQt",
+        "- PyQt missing, please install PySide6 and local PyQt4 compatibility shim\r\n",
+    )
 
 try:
     from PyQt4 import Qwt5 as Qwt
-    if not Qwt.QWT_VERSION_STR in ver_PyQwt:
-        import_log += "- Wrong PyQwt version (%s), please install PyQwt %s\r\n"%(Qwt.QWT_VERSION_STR, ver_PyQwt) 
+    qwt_version = getattr(Qwt, "QWT_VERSION_STR", "0.0.0")
+    _check_minimum("PyQwt", qwt_version, MINIMUM_VERSIONS["PyQwt"])
 except ImportError:
-    import_log += "- PyQwt missing, please install PyQwt %s\r\n"%(str(ver_PyQwt))
+    _record_missing(
+        "PyQwt",
+        "- PyQwt missing, please install pyqtgraph (Qwt compatibility layer)\r\n",
+    )
 
 try:
     from lxml import etree
-    if not etree.__version__ in ver_lxml:
-        import_log += "- Wrong lxml version (%s), please install lxml %s\r\n"%(etree.__version__, ver_lxml) 
+    _check_minimum("lxml", etree.__version__, MINIMUM_VERSIONS["lxml"])
 except ImportError:
-    import_log += "- lxml missing, please install lxml %s\r\n"%(str(ver_lxml))
+    _record_missing(
+        "lxml",
+        "- lxml missing, please install lxml >= %s\r\n" % (MINIMUM_VERSIONS["lxml"],),
+    )
     
+
+
+def dependency_status():
+    """Return collected dependency info for diagnostics."""
+    return {
+        'missing': list(missing_dependencies),
+        'version_mismatch': list(version_mismatches),
+        'log': import_log.strip(),
+    }
+
+
+def has_all_dependencies():
+    return len(missing_dependencies) == 0
+

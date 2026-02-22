@@ -149,10 +149,7 @@ class Ui_frmStorageVisionOnline(object):
         self.verticalLayout.addLayout(self.gridLayout)
         self.pushButtonRecord = QtGui.QPushButton(self.groupBox)
         self.pushButtonRecord.setMinimumSize(QtCore.QSize(100, 40))
-        icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icons/record_grey.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        icon.addPixmap(QtGui.QPixmap(":/icons/record.png"), QtGui.QIcon.Normal, QtGui.QIcon.On)
-        self.pushButtonRecord.setIcon(icon)
+        self.pushButtonRecord.setIcon(QtGui.QIcon(":/icons/record.png"))
         self.pushButtonRecord.setIconSize(QtCore.QSize(32, 32))
         self.pushButtonRecord.setCheckable(True)
         self.pushButtonRecord.setObjectName("pushButtonRecord")
@@ -173,4 +170,7 @@ class Ui_frmStorageVisionOnline(object):
         self.label_2.setText(QtGui.QApplication.translate("frmStorageVisionOnline", "[d:h:m]", None, QtGui.QApplication.UnicodeUTF8))
         self.pushButtonRecord.setText(QtGui.QApplication.translate("frmStorageVisionOnline", "Record", None, QtGui.QApplication.UnicodeUTF8))
 
-import resources_rc
+try:
+    import resources_rc
+except ImportError:
+    from res import resources_rc

@@ -30,10 +30,8 @@ class Ui_frmActiChampOnline(object):
         self.pushButtonStartDefault = QtGui.QPushButton(self.groupBoxMode)
         self.pushButtonStartDefault.setMinimumSize(QtCore.QSize(100, 40))
         self.pushButtonStartDefault.setStyleSheet("text-align: left; padding-left: 10px;")
-        icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icons/play.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        icon.addPixmap(QtGui.QPixmap(":/icons/play_green.png"), QtGui.QIcon.Normal, QtGui.QIcon.On)
-        self.pushButtonStartDefault.setIcon(icon)
+        playIcon = QtGui.QIcon(":/icons/play.png")
+        self.pushButtonStartDefault.setIcon(playIcon)
         self.pushButtonStartDefault.setIconSize(QtCore.QSize(32, 32))
         self.pushButtonStartDefault.setCheckable(True)
         self.pushButtonStartDefault.setAutoExclusive(True)
@@ -43,7 +41,7 @@ class Ui_frmActiChampOnline(object):
         self.pushButtonStartShielding = QtGui.QPushButton(self.groupBoxMode)
         self.pushButtonStartShielding.setMinimumSize(QtCore.QSize(100, 40))
         self.pushButtonStartShielding.setStyleSheet("text-align: left; padding-left: 10px;")
-        self.pushButtonStartShielding.setIcon(icon)
+        self.pushButtonStartShielding.setIcon(playIcon)
         self.pushButtonStartShielding.setIconSize(QtCore.QSize(32, 32))
         self.pushButtonStartShielding.setCheckable(True)
         self.pushButtonStartShielding.setAutoExclusive(True)
@@ -52,10 +50,7 @@ class Ui_frmActiChampOnline(object):
         self.gridLayout.addLayout(self.horizontalLayout, 0, 0, 1, 1)
         self.pushButtonStop = QtGui.QPushButton(self.groupBoxMode)
         self.pushButtonStop.setMinimumSize(QtCore.QSize(100, 40))
-        icon1 = QtGui.QIcon()
-        icon1.addPixmap(QtGui.QPixmap(":/icons/stop.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        icon1.addPixmap(QtGui.QPixmap(":/icons/stop_green.png"), QtGui.QIcon.Normal, QtGui.QIcon.On)
-        self.pushButtonStop.setIcon(icon1)
+        self.pushButtonStop.setIcon(QtGui.QIcon(":/icons/stop.png"))
         self.pushButtonStop.setIconSize(QtCore.QSize(32, 32))
         self.pushButtonStop.setCheckable(True)
         self.pushButtonStop.setAutoExclusive(True)
@@ -65,7 +60,7 @@ class Ui_frmActiChampOnline(object):
         self.horizontalLayout_2.setObjectName("horizontalLayout_2")
         self.pushButtonStartImpedance = QtGui.QPushButton(self.groupBoxMode)
         self.pushButtonStartImpedance.setMinimumSize(QtCore.QSize(100, 40))
-        self.pushButtonStartImpedance.setIcon(icon)
+        self.pushButtonStartImpedance.setIcon(playIcon)
         self.pushButtonStartImpedance.setIconSize(QtCore.QSize(32, 32))
         self.pushButtonStartImpedance.setCheckable(True)
         self.pushButtonStartImpedance.setAutoExclusive(True)
@@ -74,7 +69,7 @@ class Ui_frmActiChampOnline(object):
         self.horizontalLayout_2.addWidget(self.pushButtonStartImpedance)
         self.pushButtonStartTest = QtGui.QPushButton(self.groupBoxMode)
         self.pushButtonStartTest.setMinimumSize(QtCore.QSize(100, 40))
-        self.pushButtonStartTest.setIcon(icon)
+        self.pushButtonStartTest.setIcon(playIcon)
         self.pushButtonStartTest.setIconSize(QtCore.QSize(32, 32))
         self.pushButtonStartTest.setCheckable(True)
         self.pushButtonStartTest.setChecked(False)
@@ -103,4 +98,7 @@ class Ui_frmActiChampOnline(object):
         self.pushButtonStartTest.setText(QtGui.QApplication.translate("frmActiChampOnline", "Test\n"
 "Mode", None, QtGui.QApplication.UnicodeUTF8))
 
-import resources_rc
+try:
+    import resources_rc
+except ImportError:
+    from res import resources_rc

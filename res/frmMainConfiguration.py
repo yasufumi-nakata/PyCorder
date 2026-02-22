@@ -14,9 +14,7 @@ class Ui_frmConfiguration(object):
         frmConfiguration.setObjectName("frmConfiguration")
         frmConfiguration.setWindowModality(QtCore.Qt.ApplicationModal)
         frmConfiguration.resize(861, 743)
-        icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(":/icons/process.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        frmConfiguration.setWindowIcon(icon)
+        frmConfiguration.setWindowIcon(QtGui.QIcon(":/icons/process.png"))
         self.gridLayout = QtGui.QGridLayout(frmConfiguration)
         self.gridLayout.setObjectName("gridLayout")
         self.tabWidget = QtGui.QTabWidget(frmConfiguration)
@@ -41,4 +39,7 @@ class Ui_frmConfiguration(object):
         frmConfiguration.setWindowTitle(QtGui.QApplication.translate("frmConfiguration", "Configuration", None, QtGui.QApplication.UnicodeUTF8))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab1), QtGui.QApplication.translate("frmConfiguration", "Tab 1", None, QtGui.QApplication.UnicodeUTF8))
 
-import resources_rc
+try:
+    import resources_rc
+except ImportError:
+    from res import resources_rc

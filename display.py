@@ -198,13 +198,13 @@ class DISP_Scope(Qwt.QwtPlot, ModuleBase):
         # timing test functions
         # first call
         if self.ttime < 0: 
-            self.ttime = time.clock()
+            self.ttime = time.perf_counter()
             self.tcount = 30.0
         else:
-            if time.clock() >= self.ttime + self.tcount:
+            if time.perf_counter() >= self.ttime + self.tcount:
                 # send status info
                 info = "Received Samples = %d / Sample Counter = %d / Time = %.3fs"\
-                %(self.eeg.sample_counter, self.eeg.sample_channel[0,-1]+1, time.clock()-self.ttime)
+                %(self.eeg.sample_counter, self.eeg.sample_channel[0,-1]+1, time.perf_counter()-self.ttime)
                 #self.send_event(ModuleEvent(self._object_name, EventType.MESSAGE))
                 self.tcount += 30.0
 
@@ -344,7 +344,7 @@ class DISP_Scope(Qwt.QwtPlot, ModuleBase):
 
         # insert new traces
         font = Qt.QFont("arial", 8)
-        for pccount in xrange(self.channel_group.shape[0]):
+        for pccount in range(self.channel_group.shape[0]):
             color = self.channel_group_properties[pccount].color
             title = Qwt.QwtText(self.channel_group_properties[pccount].name)
             title.setFont(font)
@@ -475,7 +475,7 @@ class DISP_Scope(Qwt.QwtPlot, ModuleBase):
             self.update_display = False
 
             # check color attributes
-            for pccount in xrange(self.channel_group.shape[0]):
+            for pccount in range(self.channel_group.shape[0]):
                 if self.selectedChannel == self.channel_group_properties[pccount].name:
                     color = Qt.Qt.green
                 else:
@@ -510,9 +510,9 @@ class DISP_Scope(Qwt.QwtPlot, ModuleBase):
             # release thread lock 
             self._thLock.release()
 
-            t = time.clock()
+            t = time.perf_counter()
             self.replot()
-            displayTime = time.clock() - t
+            displayTime = time.perf_counter() - t
     
        
     def setTimebase(self, timebase):
@@ -612,7 +612,11 @@ class DISP_Scope(Qwt.QwtPlot, ModuleBase):
         self._thLock.acquire()
         # change display channel configuration
         if idx >= 0:
-            self.channel_slice = self.online_cfg.comboBoxChannels.itemData(idx).toPyObject()
+            data = self.online_cfg.comboBoxChannels.itemData(idx)
+            try:
+                self.channel_slice = data.toPyObject()
+            except AttributeError:
+                self.channel_slice = data
             self.arrangeTraces()
         else:
             self.channel_slice = slice(0,0,1) 
@@ -649,7 +653,7 @@ class _TimeScaleDraw(Qwt.QwtScaleDraw):
     ''' Draw custom time values for x-axis
     '''
     def __init__(self, *args):
-        apply(Qwt.QwtScaleDraw.__init__, (self,) + args)
+        Qwt.QwtScaleDraw.__init__(self, *args)
         self._offset = 0.0
 
     def label(self, value):
@@ -670,7 +674,7 @@ class _ScopeLegend(Qwt.QwtLegend):
     labels at curve positions 
     """
     def __init__(self, *args):
-        apply(Qwt.QwtLegend.__init__, (self,) + args)
+        Qwt.QwtLegend.__init__(self, *args)
         layout = self.contentsWidget().layout()
         layout.setSpacing(0)
     
@@ -718,20 +722,34 @@ class _OnlineCfgPane(Qt.QFrame, frmScopeOnline.Ui_frmScopeOnline):
     def __init__(self, *args):
         ''' Constructor
         '''
-        apply(Qt.QFrame.__init__, (self,) + args)
+        Qt.QFrame.__init__(self, *args)
         self.setupUi(self)
 
         # set default values
         self.group_indices = dict()
         self.group_slices = defaultdict(list)
         
-        self.group_size, ok = self.comboBoxGroupSize.currentText().toInt()
-        if not ok:
-            self.group_size = 32
+        try:
+            self.group_size, ok = self.comboBoxGroupSize.currentText().toInt()
+        except AttributeError:
+            try:
+                self.group_size = int(self.comboBoxGroupSize.currentText())
+                ok = True
+            except Exception:
+                self.group_size = 32
+                ok = False
         self.checkBoxBaseline.setChecked(False)
         self.pushButton_Now.setEnabled(False)
         
-        self.eeg_scale,ok = self.comboBoxScale.currentText().toFloat()
+        try:
+            self.eeg_scale,ok = self.comboBoxScale.currentText().toFloat()
+        except AttributeError:
+            try:
+                self.eeg_scale = float(self.comboBoxScale.currentText())
+                ok = True
+            except Exception:
+                self.eeg_scale = 100.0
+                ok = False
         self.aux_scale = self.eeg_scale
         
         # fill scale combo box list
@@ -782,9 +800,13 @@ class _OnlineCfgPane(Qt.QFrame, frmScopeOnline.Ui_frmScopeOnline):
     def _isEegGroup(self):
         ''' Get info about current selected channel group
         '''
-        if not self.group_slices.has_key(ChannelGroup.EEG):
+        if ChannelGroup.EEG not in self.group_slices:
             return False
-        channel_slice = self.comboBoxChannels.itemData(self.comboBoxChannels.currentIndex()).toPyObject()
+        data = self.comboBoxChannels.itemData(self.comboBoxChannels.currentIndex())
+        try:
+            channel_slice = data.toPyObject()
+        except AttributeError:
+            channel_slice = data
         if channel_slice in self.group_slices[ChannelGroup.EEG]:
             return True
         return False
@@ -799,9 +821,16 @@ class _OnlineCfgPane(Qt.QFrame, frmScopeOnline.Ui_frmScopeOnline):
         itemlist = []
         for i in range(cb.count()):
             if isdata:
-                val = cb.itemData(i).toPyObject()
+                data = cb.itemData(i)
+                try:
+                    val = data.toPyObject()
+                except AttributeError:
+                    val = data
             else:
-                val,ok = cb.itemText(i).toFloat()
+                try:
+                    val,ok = cb.itemText(i).toFloat()
+                except AttributeError:
+                    val = float(cb.itemText(i))
             itemlist.append( (i, val) )
         idx = itemlist[-1][0]
         for item in sorted(itemlist, key=itemgetter(1)):
@@ -849,14 +878,22 @@ class _OnlineCfgPane(Qt.QFrame, frmScopeOnline.Ui_frmScopeOnline):
         ''' Get current selected timebase value from combobox
         @return: float timebase
         '''
-        time = self.comboBoxTime.itemData(self.comboBoxTime.currentIndex()).toPyObject()
+        data = self.comboBoxTime.itemData(self.comboBoxTime.currentIndex())
+        try:
+            time = data.toPyObject()
+        except AttributeError:
+            time = data
         return time
 
     def get_scale(self):
         ''' Get current selected scale value from combobox
         @return: float scale
         '''
-        scale = self.comboBoxScale.itemData(self.comboBoxScale.currentIndex()).toPyObject()
+        data = self.comboBoxScale.itemData(self.comboBoxScale.currentIndex())
+        try:
+            scale = data.toPyObject()
+        except AttributeError:
+            scale = data
         return scale
 
     def get_groupscale(self):
@@ -869,7 +906,15 @@ class _OnlineCfgPane(Qt.QFrame, frmScopeOnline.Ui_frmScopeOnline):
         ''' Get current selected group size value from combobox
         @return: float size
         '''
-        size,ok = self.comboBoxGroupSize.currentText().toFloat()
+        try:
+            size,ok = self.comboBoxGroupSize.currentText().toFloat()
+        except AttributeError:
+            try:
+                size = float(self.comboBoxGroupSize.currentText())
+                ok = True
+            except Exception:
+                size = 32.0
+                ok = False
         return size
 
     def _slice_channels(self):
@@ -880,7 +925,7 @@ class _OnlineCfgPane(Qt.QFrame, frmScopeOnline.Ui_frmScopeOnline):
         
         # create channel groups of group_size
         slices = defaultdict(list)
-        for group, channels in self.group_indices.iteritems():
+        for group, channels in self.group_indices.items():
             for si in channels[0::self.group_size]:
                 sl = slice(si, min(si+self.group_size, channels[-1]+1), 1)
                 slices[group].append(sl)
@@ -889,7 +934,7 @@ class _OnlineCfgPane(Qt.QFrame, frmScopeOnline.Ui_frmScopeOnline):
         if self.group_slices != slices:
             self.comboBoxChannels.clear()
             self.group_slices = slices
-            for group, slice_list in slices.iteritems():
+            for group, slice_list in slices.items():
                 if group in range(len(ChannelGroup.Name)):
                     group_name = ChannelGroup.Name[group]
                 else:
@@ -908,9 +953,15 @@ class _OnlineCfgPane(Qt.QFrame, frmScopeOnline.Ui_frmScopeOnline):
         ''' Group size selection changed
         '''
         if value >= 0:
-            self.group_size, ok = self.comboBoxGroupSize.currentText().toInt()
-            if not ok:
-                self.group_size = 32
+            try:
+                self.group_size, ok = self.comboBoxGroupSize.currentText().toInt()
+            except AttributeError:
+                try:
+                    self.group_size = int(self.comboBoxGroupSize.currentText())
+                    ok = True
+                except Exception:
+                    self.group_size = 32
+                    ok = False
         else:
             self.group_size = 32
         self._slice_channels()
