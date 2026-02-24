@@ -45,7 +45,7 @@ DISPLAY MODULE
 ------------------------------------------------------------
 '''
     
-class DISP_Scope(Qwt.QwtPlot, ModuleBase):
+class DISP_Scope(ModuleBase, Qwt.QwtPlot):
     """ EEG signal display widget.
     """
     def __init__(self, *args, **keys):
@@ -676,7 +676,8 @@ class _ScopeLegend(Qwt.QwtLegend):
     def __init__(self, *args):
         Qwt.QwtLegend.__init__(self, *args)
         layout = self.contentsWidget().layout()
-        layout.setSpacing(0)
+        if layout is not None:
+            layout.setSpacing(0)
     
     def heightForWidth(self, width):
         return 0
@@ -703,8 +704,9 @@ class _ScopeLegend(Qwt.QwtLegend):
             item.setFixedHeight(itemHeight)
             yBottom += itemHeight
         layout = self.contentsWidget().layout()
-        layout.setGeometry(Qt.QRect(Qt.QPoint(0,offset), 
-                                    Qt.QPoint(visibleSize.width(), visibleSize.height() -2 * offset)))
+        if layout is not None:
+            layout.setGeometry(Qt.QRect(Qt.QPoint(0,offset),
+                                        Qt.QPoint(visibleSize.width(), visibleSize.height() -2 * offset)))
         self.contentsWidget().resize(visibleSize.width(), visibleSize.height())
         return
 

@@ -711,7 +711,7 @@ class AMP_ActiChamp(ModuleBase):
         ''' Get data from amplifier
         and return the eeg data block
         '''
-        t = time.clock()
+        t = time.perf_counter()
         self.eeg_data.performance_timer = 0
         self.eeg_data.performance_timer_max = 0
         self.recordtime = 0.0

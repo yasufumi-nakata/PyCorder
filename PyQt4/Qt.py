@@ -225,6 +225,15 @@ class QStringList(list):
 
 QDir = QtCore.QDir
 
+
+def __getattr__(name):
+    # Fallback lookup so legacy code can access additional Qt classes via
+    # `from PyQt4 import Qt; Qt.QVBoxLayout` style.
+    for module in (QtWidgets, QtGui, QtCore):
+        if hasattr(module, name):
+            return getattr(module, name)
+    raise AttributeError("module 'PyQt4.Qt' has no attribute %r" % (name,))
+
 # Re-export submodules for import style from PyQt4 import Qt; then Qt.Qt etc.
 __all__ = [
     'Qt', 'QApplication', 'QWidget', 'QDialog', 'QMainWindow', 'QMessageBox', 'QFileDialog',

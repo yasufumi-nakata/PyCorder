@@ -31,6 +31,8 @@ class QwtText:
         self._text = str(text)
         self._color = QtGui.QColor('black')
         self._font = QtGui.QFont()
+    def setText(self, text):
+        self._text = str(text)
     def setFont(self, f):
         self._font = f
     def setColor(self, c):
@@ -42,6 +44,7 @@ class QwtText:
 
 
 class QwtPlot(pg.PlotWidget):
+    xTop = 2
     xBottom = 0
     yLeft = 1
     LeftLegend = 0
@@ -117,8 +120,23 @@ class QwtPlotCurve(pg.PlotDataItem):
         super(QwtPlotCurve, self).__init__(x=[], y=[])
         self._title = title
         self._style = self.Lines
+        self._pen_color = QtGui.QColor('white')
+    class _PenProxy:
+        def __init__(self, color):
+            self.color = color
+    def pen(self):
+        return self._PenProxy(self._pen_color)
     def setPen(self, pen):
-        color = pen.color()
+        if hasattr(pen, 'color'):
+            if callable(pen.color):
+                color = pen.color()
+            else:
+                color = pen.color
+        else:
+            color = pen
+        if not isinstance(color, QtGui.QColor):
+            color = QtGui.QColor(color)
+        self._pen_color = color
         super(QwtPlotCurve, self).setPen(pg.mkPen(color))
     def setYAxis(self, axis):
         pass

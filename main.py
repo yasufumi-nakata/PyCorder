@@ -54,6 +54,11 @@ B{Dependencies:}
 @version: 1.0
 '''
 import sys
+import warnings
+
+# Silence compatibility-noise warnings from the Qt4-on-Qt6 shim stack.
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 try:
     from PyQt4.Qt import QString
@@ -102,6 +107,7 @@ ForceBatteryLogging = True
 
 import collections
 import re
+import platform
 from optparse import OptionParser
 
 
@@ -199,6 +205,23 @@ def InstantiateModules(run_as):
 		@param run_as: command line option (-r, --runas) for different module configurations
 		@return: list with instantiated module objects
 		'''
+		def _make_display():
+				# The legacy Qwt/pyqtgraph shim is unstable on some macOS Qt stacks.
+				# Use a simpler stable scope by default on macOS unless explicitly disabled.
+				use_simple_scope = (platform.system() == "Darwin")
+				if use_simple_scope:
+						try:
+								from display_simple import DISP_ScopeSimple
+								return DISP_ScopeSimple(instance=0)
+						except Exception as e:
+								print("WARNING: Simple display scope unavailable (%s)"%(e))
+				try:
+						return DISP_Scope(instance=0)
+				except Exception as e:
+						from display_fallback import DISP_ScopeLite
+						print("WARNING: Display scope fallback enabled (%s)"%(e))
+						return DISP_ScopeLite(instance=0, reason=str(e))
+
 		# get command line arguments
 		if 'RC' in run_as:
 				# run as remote client
@@ -206,7 +229,7 @@ def InstantiateModules(run_as):
 									 TRG_Eeg(),
 									 FLT_Eeg(),
 									 IMP_Display(),
-									 DISP_Scope(instance=0)]
+									 _make_display()]
 		else:
 				# run as actiCHamp recorder
 				modules = [AMP_ActiChamp(),
@@ -214,11 +237,15 @@ def InstantiateModules(run_as):
 									 TRG_Eeg(),
 									 StorageVision(),
 									 FLT_Eeg(),
-									 dc_offset(),
-									 RDA_Server(),
+									 dc_offset()]
+				try:
+						modules.append(RDA_Server())
+				except Exception as e:
+						print("WARNING: RDA Server disabled (%s)"%(e))
+				modules.extend([
 									 IMP_Display(),
-									 DISP_Scope(instance=0)
-									 ]
+									 _make_display()
+									 ])
 		return modules
 
 
@@ -1294,9 +1321,9 @@ def cmpver(a, b, n=3):
 						return int(i)
 				except ValueError:
 						return i
-		a = map(fixup, re.findall("\d+|\w+", a))
-		b = map(fixup, re.findall("\d+|\w+", b))
-		return cmp(a[:n], b[:n])
+		a = list(map(fixup, re.findall(r"\d+|\w+", a)))
+		b = list(map(fixup, re.findall(r"\d+|\w+", b)))
+		return (a[:n] > b[:n]) - (a[:n] < b[:n])
 
 
 
@@ -1376,7 +1403,8 @@ def main(args):
 						smoketest_ms = 1500
 
 		print("Starting PyCorder, please wait ...\n")
-		setpriority(priority=4)
+		if sys.platform.startswith("win"):
+				setpriority(priority=4)
 		app = Qt.QApplication(args)
 		rc = 0
 		try:
@@ -1384,7 +1412,11 @@ def main(args):
 		except ImportError:
 				_resources_rc = None
 		if _resources_rc is not None:
-				_resources_rc.qInitResources()
+				# Qt resource registration has caused startup crashes on some
+				# macOS/PySide6 environments; skip it there and use file-based
+				# resources instead.
+				if not sys.platform.startswith("darwin"):
+						_resources_rc.qInitResources()
 		if smoketest_requested:
 				QtCore.QTimer.singleShot(smoketest_ms, app.quit)
 				rc = app.exec_()
@@ -1402,7 +1434,8 @@ def main(args):
 						platform_name = ""
 						if hasattr(Qt.QApplication, "platformName"):
 								platform_name = str(Qt.QApplication.platformName()).lower()
-						if platform_name not in ("offscreen", "minimal"):
+						# Avoid aggressive raise/activate on macOS due sporadic Qt crashes.
+						if platform_name not in ("offscreen", "minimal") and not sys.platform.startswith("darwin"):
 								win.raise_()
 								win.activateWindow()
 								QtCore.QTimer.singleShot(0, win.raise_)

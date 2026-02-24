@@ -492,6 +492,11 @@ class ActiChamp(object):
         self.sampleCounterAdjust = 0 #: sample counter wrap around, HW counter is 32bit value but we need 64bit
         self.BlockingMode = True     #: read data in blocking mode
         self.EmulationMode = False   #: emulate hardware
+        self._sim_module_count = 2
+        self._sim_sample_counter = 0
+        self._sim_signal_rate = None
+        self._sim_last_trigger = 0
+        self._sim_next_block_time = None
 
         # set default properties
         self.properties.CountEeg = 32
@@ -533,6 +538,13 @@ class ActiChamp(object):
             self.close()
         except:
             pass
+        if self.lib is None:
+            try:
+                modules = self.getEmulationMode()
+                if modules > 0:
+                    self._sim_module_count = int(modules)
+            except Exception:
+                pass
         
     def _resetDeviceProperties(self):
         ''' Set channel count to zero
@@ -541,6 +553,78 @@ class ActiChamp(object):
         self.properties.CountAux = 0
         self.properties.TriggersIn = 0
         self.properties.TriggersOut = 0
+
+    def _apply_simulation_profile(self, modules):
+        '''Apply device properties for pure Python simulation mode.'''
+        try:
+            modules = int(modules)
+        except Exception:
+            modules = 0
+        if modules <= 0:
+            modules = self._sim_module_count
+        modules = max(1, min(modules, 5))
+
+        self._sim_module_count = modules
+        self.EmulationMode = True
+        self.devicehandle = 1
+        self.modulestate.Present = (1 << (modules + 1)) - 1
+        self.modulestate.Enabled = self.modulestate.Present
+        self.properties.CountEeg = modules * 32
+        self.properties.CountAux = 8
+        self.properties.TriggersIn = 8
+        self.properties.TriggersOut = 8
+        self.properties.Rate = sample_rate.get(self.settings.Rate, 10000.0)
+
+    def _simulate_read(self, eegcount, auxcount):
+        '''Generate deterministic sine-wave data for GUI/recording tests.'''
+        sr = float(sample_rate.get(self.settings.Rate, 1000.0))
+        interval = 0.05 if self.BlockingMode else 0.02
+        if self._sim_next_block_time is None:
+            self._sim_next_block_time = time.perf_counter()
+        now = time.perf_counter()
+        wait_s = self._sim_next_block_time - now
+        if wait_s > 0:
+            time.sleep(wait_s)
+            now = time.perf_counter()
+        self._sim_next_block_time = now + interval
+
+        block_samples = max(1, int(round(sr * interval)))
+        start = int(self._sim_sample_counter)
+        sct = np.arange(start, start + block_samples, dtype=np.uint64)
+        self._sim_sample_counter = int(sct[-1] + 1)
+
+        numchannels = int(eegcount + auxcount)
+        if numchannels > 0:
+            if (not hasattr(self, "DummySignals")
+                or len(self.DummySignals) != numchannels
+                or self._sim_signal_rate != sr):
+                sg = SignalGenerator(float)
+                _, self.DummySignals = sg.GetSineWaveBuffers(
+                    numchannels,
+                    [1.0, 2.0, 3.7, 5.0, 10.0, 17.2, 20.0, 50.0, 100.0, 200.0],
+                    1.0,
+                    100.0,
+                    0.0,
+                    sr,
+                )
+                self._sim_signal_rate = sr
+            sc_idx = np.asarray(sct, dtype=np.int64)
+            eeg = np.zeros((numchannels, block_samples), dtype=float)
+            for c in range(numchannels):
+                eeg[c] = np.take(self.DummySignals[c], sc_idx, mode="wrap")
+        else:
+            eeg = np.zeros((0, block_samples), dtype=float)
+
+        trg = np.zeros((1, block_samples), dtype=np.uint32)
+        trigger_period = max(1, int(sr * 10.0))
+        tr_idx = np.nonzero((sct % trigger_period) < 3)[0]
+        if tr_idx.size:
+            trg[0, tr_idx] = 1
+            self._sim_last_trigger = 1
+        else:
+            self._sim_last_trigger = 0
+
+        return [eeg, trg, sct.reshape(1, -1)], None
         
         
     def loadLib(self):
@@ -571,11 +655,9 @@ class ActiChamp(object):
         if self.running:
             return
         if self.lib == None:
-            # 非Windows・未検出時はエミュレーションにフォールバック
-            if platform.system() != 'Windows':
-                self.EmulationMode = True
-                return
-            raise AmpError("library ActiChamp_x86.dll not available")
+            modules = self.getEmulationMode()
+            self._apply_simulation_profile(modules)
+            return
 
         # check if device hardware is available
         self._resetDeviceProperties()
@@ -621,9 +703,9 @@ class ActiChamp(object):
         ''' Close hardware device
         '''
         if self.lib == None:
-            if platform.system() != 'Windows':
-                return
-            raise AmpError("library ActiChamp_x86.dll not available")
+            self.running = False
+            self.devicehandle = 0
+            return
         if self.devicehandle != 0:
             if self.running:
                 try:
@@ -660,7 +742,18 @@ class ActiChamp(object):
         self.binning = int(binning)
         self.binning_offset = 0
         if self.devicehandle == 0:
-            raise AmpError("device not open")
+            if self.lib is None:
+                self.open()
+            else:
+                raise AmpError("device not open")
+        if self.lib is None:
+            modules = self.getEmulationMode()
+            self._apply_simulation_profile(modules)
+            self._sim_signal_rate = None
+            self._sim_next_block_time = None
+            trgdelay = trigger_delay[self.settings.Rate]
+            self.trgdelaybuf = np.zeros(trgdelay, np.uint32) + 0xFFFF
+            return
 
         # setup amplifier
         ex_settings = self._get_settings_ex(self.settings) 
@@ -715,6 +808,15 @@ class ActiChamp(object):
             return
         if self.devicehandle == 0:
             raise AmpError("device not open")
+        if self.lib is None:
+            self.running = True
+            self.readError = False
+            self.sampleCounterAdjust = 0
+            self._sim_sample_counter = 0
+            self._sim_next_block_time = time.perf_counter()
+            self.BlockTimer = time.perf_counter()
+            self.DummySignals = []
+            return
 
         # start amplifier
         err = self.lib.champStart(self.devicehandle)
@@ -754,6 +856,8 @@ class ActiChamp(object):
         self.running = False
         if self.devicehandle == 0:
             raise AmpError("device not open")
+        if self.lib is None:
+            return
         err = self.lib.champStop(self.devicehandle)
         if err != CHAMP_ERR_OK:
             raise AmpError("failed to stop device", err)
@@ -768,6 +872,8 @@ class ActiChamp(object):
         '''
         if not self.running or (self.devicehandle == 0) or self.readError:
             return None, None
+        if self.lib is None:
+            return self._simulate_read(eegcount, auxcount)
         
         # calculate data amount for an interval of 
         interval = 0.05  # interval in [s]
@@ -811,9 +917,9 @@ class ActiChamp(object):
             # copy remainder from last read back to sample buffer
             ctypes.memmove(self.buffer, self.binning_buffer, self.binning_offset)  
             # new remainder size
-            remainder = ((total_bytes / bytes_per_sample) % self.binning) * bytes_per_sample
+            remainder = ((total_bytes // bytes_per_sample) % self.binning) * bytes_per_sample
             # number of binning aligned samples
-            binning_samples = total_bytes / bytes_per_sample / self.binning * self.binning
+            binning_samples = (total_bytes // bytes_per_sample // self.binning) * self.binning
             src_offset = binning_samples * bytes_per_sample
             # copy new remainder to binning buffer
             ctypes.memmove(self.binning_buffer, ctypes.byref(self.buffer, src_offset), remainder) 
@@ -822,9 +928,9 @@ class ActiChamp(object):
             # there must be at least one binning sample
             if binning_samples == 0:
                 return None, None
-            items = binning_samples * bytes_per_sample / np.dtype(np.int32).itemsize
+            items = (binning_samples * bytes_per_sample) // np.dtype(np.int32).itemsize
         else:
-            items = bytesread / np.dtype(np.int32).itemsize
+            items = bytesread // np.dtype(np.int32).itemsize
         
         # channel order in buffer is S1CH1,S1CH2..S1CHn, S2CH1,S2CH2,..S2nCHn, ...
         x = np.fromstring(self.buffer, np.int32, items)
@@ -915,6 +1021,13 @@ class ActiChamp(object):
         '''
         if not self.running or (self.devicehandle == 0):
             return None, None
+        if self.lib is None:
+            item_count = self.properties.CountEeg + 1
+            phase = (self._sim_sample_counter % 2000) / 2000.0 * np.pi
+            ramp = np.linspace(3000.0, 12000.0, item_count)
+            wobble = 500.0 * np.sin(np.linspace(0.0, np.pi, item_count) + phase)
+            imp = np.clip(ramp + wobble, 500.0, 50000.0).astype(np.uint32)
+            return imp, None
         
         disconnected = None
         # read impedance data from device
@@ -947,6 +1060,8 @@ class ActiChamp(object):
         '''
         if self.devicehandle == 0:
             return
+        if self.lib is None:
+            return
         imp_settings = CHAMP_IMPEDANCE_SETUP()
         imp_settings.Good = int(good)
         imp_settings.Bad = int(bad)
@@ -962,6 +1077,9 @@ class ActiChamp(object):
         '''
         if self.devicehandle == 0:
             return
+        if self.lib is None:
+            self._sim_last_trigger = trigger & 0xFF
+            return
         
         # 8-bit inputs (bits 0 - 7) + 8-bit outputs (bits 8 - 15) + 16 MSB reserved bits.
         trigger = (trigger & 0xFF) << 8
@@ -976,6 +1094,7 @@ class ActiChamp(object):
         '''
         emulation = 0
         modules = 0
+        model_channels = 0
         try:
             ini = configparser.ConfigParser()
             if self.x64:
@@ -984,17 +1103,34 @@ class ActiChamp(object):
                 filename = "ActiChamp_x86.dll.ini"
                 
             if len(ini.read(filename)) > 0:
-                emulation = ini.getint("Main", "Emulation")
-                if emulation != 0:
-                    modules = ini.getint("Emulation", "Model") / 32
+                try:
+                    emulation = ini.getint("Main", "Emulation")
+                except Exception:
+                    emulation = 0
+                try:
+                    model_channels = ini.getint("Emulation", "Model")
+                except Exception:
+                    model_channels = 0
+                if emulation != 0 and model_channels > 0:
+                    modules = int(model_channels // 32)
                 try:
                     self.enablePllConfiguration = (ini.getint("Main", "EnablePllConfiguration") != 0)
                 except:
                     self.enablePllConfiguration = False
         except:
             modules = 0
-        self.EmulationMode = (modules > 0)
-        return modules
+        if modules > 0:
+            self._sim_module_count = max(1, int(modules))
+        if self.lib is None:
+            if modules <= 0:
+                if model_channels > 0:
+                    modules = int(max(1, model_channels // 32))
+                else:
+                    modules = max(1, int(self._sim_module_count))
+            self.EmulationMode = True
+        else:
+            self.EmulationMode = (modules > 0)
+        return int(modules)
 
     def setEmulationMode(self, modules):
         ''' Set/Reset emulation flag in INI file
@@ -1003,6 +1139,10 @@ class ActiChamp(object):
         # not possible if device is already open
         if self.devicehandle != 0:
             return
+        try:
+            modules = int(modules)
+        except Exception:
+            modules = 0
 
         # write new settings to INI file
         ini = configparser.ConfigParser()
@@ -1023,6 +1163,11 @@ class ActiChamp(object):
             fp.close()
         else:
             raise AmpError("INI file %s not found"%(filename))
+        if modules > 0:
+            self._sim_module_count = max(1, min(modules, 5))
+        if self.lib is None:
+            self.EmulationMode = True
+            return
             
         # reload the DLL
         self.loadLib()
@@ -1066,6 +1211,8 @@ class ActiChamp(object):
         '''
         if self.devicehandle == 0:
             return 0, 0, 0, 0
+        if self.lib is None:
+            return int(self._sim_sample_counter), 0, float(sample_rate.get(self.settings.Rate, 0.0)), 0.0
         status = CHAMP_DATA_STATUS()
         err = self.lib.champGetDataStatus(self.devicehandle, ctypes.byref(status))
         if err != CHAMP_ERR_OK:
@@ -1154,6 +1301,14 @@ class ActiChamp(object):
         #voltages.VDC = 0.0
         if self.devicehandle == 0:
             return 0, voltages, faultyVoltages
+        if self.lib is None:
+            voltages.VDC = 6.7
+            voltages.V3 = 3.3
+            voltages.DVDD3 = 3.3
+            voltages.AVDD3 = 3.3
+            voltages.AVDD5 = 5.0
+            voltages.REF = 2.048
+            return 0, voltages, faultyVoltages
         
         # get amplifier voltages
         err = self.lib.champGetVoltages(self.devicehandle, ctypes.byref(voltages))
@@ -1196,6 +1351,8 @@ class ActiChamp(object):
         '''
         if self.devicehandle == 0:
             return
+        if self.lib is None:
+            return
         dutyCycle = max(min(dutyCycle,100),0)   # limit to 0-100%
         period = max(min(period,10000),1)       # limit to 1-10000ms
         # use a fixed period for on/off
@@ -1218,6 +1375,19 @@ class ActiChamp(object):
                      12 = set all electrodes to red
         @return: TRUE if last electrode index reached
         '''
+        if self.lib is None:
+            if not hasattr(self, "LED_index"):
+                self.LED_index = 0
+            if step == 0:
+                self.LED_index = 0
+                return True
+            if step in (1, 2):
+                self.LED_index += 1
+                if self.LED_index >= (self.properties.CountEeg + 1):
+                    self.LED_index = 0
+            elif step in (11, 12):
+                self.LED_index = 0
+            return self.LED_index == 0
         ledcount = self.properties.CountEeg + 1
         led_array = (ctypes.c_int * ledcount)()
         led_array[:] = [0]*len(led_array)
@@ -1254,7 +1424,7 @@ class ActiChamp(object):
     def setPllInput(self):
         ''' Set the PLL input either to external or internal
         '''
-        if self.devicehandle == 0 or not self.hasPllOption() or self.getEmulationMode() != 0:
+        if self.devicehandle == 0 or self.lib is None or not self.hasPllOption() or self.getEmulationMode() != 0:
             return
         
         PllParamters = CHAMP_PLL()
@@ -1282,7 +1452,8 @@ class SignalGenerator():
     
     def GetSineWave(self, freq, samplerate, amplitude, time):
         w = 2.0 * np.pi * freq
-        t = np.linspace(0, time, samplerate * time)
+        samples = max(2, int(round(samplerate * time)))
+        t = np.linspace(0, time, samples)
         return t, np.asarray(np.sin(w*t) * amplitude, dtype=self.dtype)
         
     def GetTriangleWave(self, freq, samplerate, amplitude, time):
@@ -1296,9 +1467,9 @@ class SignalGenerator():
         cycles = 40.0
         if type(StartFrequency) == list:
             fl = StartFrequency*NumChannels
-            fSin = np.array(fl[:NumChannels+1])
+            fSin = np.array(fl[:NumChannels], dtype=float)
         else:
-            fSin = np.arange(StartFrequency, StartFrequency + NumChannels * DeltaFrequency, DeltaFrequency)
+            fSin = np.arange(StartFrequency, StartFrequency + NumChannels * DeltaFrequency, DeltaFrequency, dtype=float)
         if DeltaAmplitude != 0:
             aSin = np.arange(StartAmplitude, StartAmplitude + NumChannels * DeltaAmplitude, DeltaAmplitude, dtype=self.dtype)
         else: 
@@ -1307,7 +1478,10 @@ class SignalGenerator():
             
         Tsin = 1.0/fSin
         NumSamples = (Tsin * SampleRate)*cycles
-        tl = list(np.linspace(0, 2.0 * np.pi * cycles, s)[:-1] for s in NumSamples)
+        tl = []
+        for s in NumSamples:
+            count = max(2, int(round(float(s))))
+            tl.append(np.linspace(0, 2.0 * np.pi * cycles, count)[:-1])
         signals = list(np.asarray(np.sin(t) * a, dtype=self.dtype) for t,a in zip(tl,aSin))
         return tl, signals
         

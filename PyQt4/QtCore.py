@@ -38,3 +38,31 @@ class QVariant(object):  # minimal shim for Qt4 API
         return []
 
 
+class QString(str):
+    @staticmethod
+    def number(n):
+        return str(n)
+
+    def toFloat(self):
+        try:
+            return float(self), True
+        except Exception:
+            return 0.0, False
+
+    def toDouble(self):
+        return self.toFloat()
+
+    def toInt(self):
+        try:
+            return int(float(self)), True
+        except Exception:
+            return 0, False
+
+
+class QStringList(list):
+    def __init__(self, *args, **kwargs):
+        if len(args) == 1 and isinstance(args[0], str):
+            super(QStringList, self).__init__([args[0]])
+        else:
+            super(QStringList, self).__init__(*args, **kwargs)
+
