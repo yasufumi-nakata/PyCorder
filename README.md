@@ -29,6 +29,8 @@ Quick start:
   - `bash ./run_pycorder.sh --smoketest`
 - Automated GUI measurement check with dummy data (headless/offscreen, validates 1000 Hz by default):
   - `QT_QPA_PLATFORM=offscreen .venv/bin/python tools/gui_dummy_measurement_check.py`
+- Automated end-to-end check (measurement + file creation in one run):
+  - `QT_QPA_PLATFORM=offscreen .venv/bin/python tools/gui_dummy_recording_check.py --sample-rate-hz 1000 --duration-ms 2600`
 
 GUI startup (recommended):
 - macOS/Linux:
@@ -57,6 +59,16 @@ Validate 1000 Hz dummy acquisition (automated):
 
 You can test other rates similarly, for example:
 - `QT_QPA_PLATFORM=offscreen .venv/bin/python tools/gui_dummy_measurement_check.py --sample-rate-hz 2000 --duration-ms 2600`
+
+Validate one-shot measurement + recording file creation:
+1. Run:
+   - `QT_QPA_PLATFORM=offscreen .venv/bin/python tools/gui_dummy_recording_check.py --sample-rate-hz 1000 --duration-ms 2600`
+2. Confirm the output contains:
+   - `gui_recording_ok=True`
+   - `configured_rate=1000.0`
+   - `reported_rate=1000.0`
+3. Output files are created under:
+   - `outputs/dummy_recordings/` (`.eeg`, `.vhdr`, `.vmrk`)
 
 If GUI does not start:
 1. Run `bash ./run_pycorder.sh --smoketest` to verify dependency/runtime startup.

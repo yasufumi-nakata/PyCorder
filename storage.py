@@ -117,7 +117,7 @@ class StorageVision(ModuleBase):
         @return: objectify XML element::
             e.g.
             <StorageVision instance="0" version="1">
-                <path>D:\EEG</path>
+                <path>D:\\EEG</path>
                 ...
             </StorageVision>
         '''
@@ -223,16 +223,27 @@ class StorageVision(ModuleBase):
             numberstring += "?"
         searchdir.setNameFilters(Qt.QStringList("%s%s.eeg"%(self.default_prefix, numberstring)))
         searchdir.setFilter(Qt.QDir.Files)
-        flist = searchdir.entryList()
+        flist = [str(f) for f in searchdir.entryList()]
         # extract numbers
-        flist.replaceInStrings(".eeg", "", Qt.Qt.CaseInsensitive)
+        flist = [f[:-4] if f.lower().endswith(".eeg") else f for f in flist]
         if len(self.default_prefix) > 0:
-            flist.replaceInStrings(self.default_prefix, "", Qt.Qt.CaseInsensitive)
+            prefix = self.default_prefix
+            prefix_lower = prefix.lower()
+            cleaned = []
+            for f in flist:
+                if f.lower().startswith(prefix_lower):
+                    cleaned.append(f[len(prefix):])
+                else:
+                    cleaned.append(f)
+            flist = cleaned
         numbers = []
         for f in flist:
-            num,ok = f.toInt()
-            if ok and (num < 10**self.default_numbersize-1):
-                numbers.append(num)
+            try:
+                num = int(f)
+                if num < 10**self.default_numbersize-1:
+                    numbers.append(num)
+            except Exception:
+                continue
         if len(numbers) > 0:
             # get the highest number
             numbers.sort()
@@ -257,21 +268,30 @@ class StorageVision(ModuleBase):
             raise Exception("path '%s' does not exist"%pn)
         eegdir.setFilter(Qt.QDir.Files)
         eegdir.setNameFilters(Qt.QStringList(u"%s*.eeg"%(fn)))
-        allfiles = eegdir.entryList()
+        allfiles = [str(f) for f in eegdir.entryList()]
         eegdir.setNameFilters(Qt.QStringList(u"%s_*.eeg"%(fn)))
-        numberedfiles = eegdir.entryList()
+        numberedfiles = [str(f) for f in eegdir.entryList()]
     
-        if allfiles.count() == 0:
+        if len(allfiles) == 0:
             return os.path.join(pn, filename + ".eeg")
         
         # extract numbers
-        numberedfiles.replaceInStrings(".eeg", "", Qt.Qt.CaseInsensitive)
-        numberedfiles.replaceInStrings(fn+"_", "", Qt.Qt.CaseInsensitive)
+        fn_prefix = (fn + "_").lower()
+        cleaned = []
+        for f in numberedfiles:
+            name = f[:-4] if f.lower().endswith(".eeg") else f
+            if name.lower().startswith(fn_prefix):
+                cleaned.append(name[len(fn)+1:])
+            else:
+                cleaned.append(name)
+        numberedfiles = cleaned
         numbers = []
         for f in numberedfiles:
-            num,ok = f.toInt()
-            if ok:
+            try:
+                num = int(f)
                 numbers.append(num)
+            except Exception:
+                continue
         if len(numbers) > 0:
             # get the highest number
             numbers.sort()
@@ -369,7 +389,7 @@ class StorageVision(ModuleBase):
 
             # create EEG header file
             try:
-                self.header_file = open(headername, "w")
+                self.header_file = open(headername, "wb")
                 h =  u"Brain Vision Data Exchange Header File Version 1.0" + crlf
                 h += u"; Data created by the actiCHamp PyCorder" + crlf + crlf
 
@@ -465,7 +485,7 @@ class StorageVision(ModuleBase):
 
             # create EEG marker file
             try:
-                self.marker_file = open(markername, "w")
+                self.marker_file = open(markername, "wb")
                 h =  u"Brain Vision Data Exchange Marker File, Version 1.0" + crlf
                 h += crlf
                 # common infos.
@@ -980,9 +1000,6 @@ class _ConfigurationPane(Qt.QFrame, frmStorageVisionConfig.Ui_frmStorageVisionCo
         example = "%s%0*d.eeg"%(self.storage.default_prefix, self.storage.default_numbersize, 1)
         self.labelExample.setText(example)
         
-
-
-
 
 
 
