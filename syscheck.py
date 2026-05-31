@@ -57,7 +57,7 @@ def logIt(logentry):
     @param logentry: log text 
     '''
     global logentries
-    print logentry 
+    print(logentry)
     logentries += logentry + "\r\n"
     
 def logHeader():
@@ -194,7 +194,7 @@ def checkAmplifierBase():
                 sd = np.std(rms_values[channels_ok])
                 mean = rms_values[channels_ok].mean()
                 mask = lambda x: ((x > mean + 3.0*sd) or (x < mean - 3.0*sd)) and x > rms_limit
-                    outlier = np.array([mask(val) for val in rms_values], dtype=bool)
+                outlier = np.array([mask(val) for val in rms_values], dtype=bool)
                 channels_ok = ~(shorted | outlier)
                 if num_outlier == len(outlier):
                     break

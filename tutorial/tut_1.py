@@ -75,13 +75,13 @@ class TUT_1(ModuleBase):
         @return: EEG_DataBlock object
         '''
         # print the channel configuration to the Python console 
-        print "%s, process_update()"%(self._object_name) # just to see where we are
-        print " Number of channels: %d, Sample Rate = %d [Hz]"%(len(params.channel_properties), params.sample_rate)
-        print " Channel names:"
+        print("%s, process_update()"%(self._object_name)) # just to see where we are
+        print(" Number of channels: %d, Sample Rate = %d [Hz]"%(len(params.channel_properties), params.sample_rate))
+        print(" Channel names:")
         names = "  "
         for channel in params.channel_properties:
             names += channel.name + ", "
-        print names
+        print(names)
 
         # modify channel properties
         self._modify_properties(params)
@@ -124,7 +124,7 @@ class TUT_1(ModuleBase):
         elif event.type == EventType.STATUS:
             eventinfo += "STATUS %s, %s"%(event.info, str(event.status_field))
 
-        print eventinfo
+        print(eventinfo)
 
         
     def process_input(self, datablock):
